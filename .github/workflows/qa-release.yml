@@ -2,6 +2,7 @@ name: QA Release Build
 
 on:
   workflow_dispatch:
+  
 jobs:
   qa-build:
     runs-on: macos-15
