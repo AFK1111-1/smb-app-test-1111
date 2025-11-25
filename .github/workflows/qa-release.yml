@@ -1,9 +1,7 @@
 name: QA Release Build
 
 on:
-  push:
-    branches: [main]
-
+  workflow_dispatch:
 jobs:
   qa-build:
     runs-on: macos-15
@@ -47,18 +45,16 @@ jobs:
           mkdir -p credentials/ios
 
       - name: Setup Android Keystore
-        run: >
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode >
-          credentials/android/release.keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > credentials/android/release.keystore
 
       - name: Setup Google Play Service Key
         run: |
           echo "${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}" | base64 --decode > credentials/android/google-play-service-key.json
 
       - name: Setup Google Services JSON for Android
-        run: >
-          echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode >
-          google-services.json
+        run: |
+          echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode > google-services.json
 
       - name: Expo Prebuild for Android
         run: npm run prebuild -- --platform android --clean
@@ -72,21 +68,20 @@ jobs:
 
       - name: Setup Apple API Key
         run: |
-          base64_content=$(echo "$APP_STORE_CONNECT_API_KEY_BASE64" | \
+          # Remove any whitespace and newlines from the base64 content
+          base64_content=$(echo "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" | \
             sed 's/-----BEGIN PRIVATE KEY-----//g' | \
             sed 's/-----END PRIVATE KEY-----//g' | \
             tr -d ' \n\r\t')
 
+          # Create the properly formatted P8 file
           echo "-----BEGIN PRIVATE KEY-----" > credentials/ios/AuthKey.p8
           echo "$base64_content" | fold -w 64 >> credentials/ios/AuthKey.p8
           echo "-----END PRIVATE KEY-----" >> credentials/ios/AuthKey.p8
-        env:
-          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
 
       - name: Setup Google Service Info Plist for iOS
-        run: >
-          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode >
-          GoogleService-Info.plist
+        run: |
+          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode > GoogleService-Info.plist
 
       - name: Expo Prebuild for iOS
         run: npm run prebuild -- --platform ios --clean
@@ -101,16 +96,15 @@ jobs:
         run: |
           mkdir -p ~/.ssh
 
-          if echo "$FASTLANE_MATCH_DEPLOY_KEY" | head -c 5 | grep -q "^-----"; then
-            echo "$FASTLANE_MATCH_DEPLOY_KEY" > ~/.ssh/id_rsa
+          # Check if the key is already in PEM format or base64 encoded
+          if echo "${{ secrets.FASTLANE_MATCH_DEPLOY_KEY }}" | head -c 5 | grep -q "^-----"; then
+            echo "${{ secrets.FASTLANE_MATCH_DEPLOY_KEY }}" > ~/.ssh/id_rsa
           else
-            echo "$FASTLANE_MATCH_DEPLOY_KEY" | base64 --decode > ~/.ssh/id_rsa
+            echo "${{ secrets.FASTLANE_MATCH_DEPLOY_KEY }}" | base64 --decode > ~/.ssh/id_rsa
           fi
 
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
-        env:
-          FASTLANE_MATCH_DEPLOY_KEY: ${{ secrets.FASTLANE_MATCH_DEPLOY_KEY }}
 
       - name: Setup Xcode 16.1
         uses: maxim-lobanov/setup-xcode@v1
@@ -122,10 +116,18 @@ jobs:
           sudo xcodebuild -runFirstLaunch
           sudo xcodebuild -license accept || echo "License already accepted"
           xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
+          
+          # Download iOS runtime in background
           sudo xcodebuild -downloadPlatform iOS &
           DOWNLOAD_PID=$!
+          
+          # Wait for download with timeout
           wait $DOWNLOAD_PID || echo "Download process finished"
+          
+          # Give time for installation
           sleep 30
+          
+          # Verify runtime installation
           xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
 
       - name: Create temporary keychain
@@ -135,14 +137,24 @@ jobs:
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
           echo "KEYCHAIN_NAME=$KEYCHAIN_NAME" >> $GITHUB_ENV
           
+          # Delete existing keychain if present
           security delete-keychain "$KEYCHAIN_NAME" 2>/dev/null || true
+          
+          # Create new keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
           
+          # Add to search list
           EXISTING_KEYCHAINS=$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')
           security list-keychains -d user -s "$KEYCHAIN_NAME" $EXISTING_KEYCHAINS
+          
+          # Set as default and unlock
           security default-keychain -s "$KEYCHAIN_NAME"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          
+          # Set keychain timeout (1 hour)
           security set-keychain-settings -t 3600 -u "$KEYCHAIN_NAME"
+          
+          # Allow codesigning to access keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME" 2>/dev/null || true
 
       - name: Unlock keychain
@@ -167,6 +179,7 @@ jobs:
 
       - name: Upload Android Release AAB
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: android-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
@@ -174,6 +187,7 @@ jobs:
 
       - name: Upload iOS Release IPA
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: ios-release-ipa
           path: ios/build/smbmobile.ipa
@@ -181,17 +195,21 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
+        if: success()
         with:
           body: |
             ## QA Release v${{ github.run_number }}
+            
             ### 📱 Build Artifacts
             - **🤖 Android AAB**: Download from Actions tab
             - **🍎 iOS IPA**: Download from Actions tab
+            
             ### 📋 Build Details
             - **Commit**: ${{ github.sha }}
             - **Branch**: ${{ github.ref_name }}
             - **Build Number**: ${{ github.run_number }}
             - **Xcode**: 16.1 with iOS 18.1 runtime
+            
             ### 🚀 Deployment
             - Android: Internal track on Google Play
             - iOS: TestFlight
