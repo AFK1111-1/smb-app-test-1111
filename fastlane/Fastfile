@@ -181,7 +181,7 @@ platform :ios do
         signingCertificate: "iPhone Distribution",
         iCloudContainerEnvironment: "Production"
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=YES",
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO -allowProvisioningUpdates",
       skip_profile_detection: true,
       clean: true,
       verbose: true

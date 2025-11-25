@@ -121,6 +121,44 @@ jobs:
           echo "📋 Pods installed:"
           ls -la Pods/ | head -n 20
           cd ..
+      
+      - name: Configure Pod Targets Code Signing
+        run: |
+          cd ios
+          
+          # Create a Ruby script to update Pod targets
+          cat > fix_pod_signing.rb << 'RUBY_SCRIPT'
+          require 'xcodeproj'
+          
+          project_path = 'Pods/Pods.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+          
+          team_id = '96W7U4JYV4'
+          
+          project.targets.each do |target|
+            puts "Configuring target: #{target.name}"
+            target.build_configurations.each do |config|
+              config.build_settings['DEVELOPMENT_TEAM'] = team_id
+              config.build_settings['CODE_SIGN_IDENTITY'] = ''
+              config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+              config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+            end
+          end
+          
+          project.save
+          puts "✅ All Pod targets configured with team ID: #{team_id}"
+          RUBY_SCRIPT
+          
+          echo "🔧 Configuring Pod targets for code signing..."
+          ruby fix_pod_signing.rb
+          
+          echo ""
+          echo "🔍 Verifying Pod signing configuration for FirebaseMessaging-FirebaseMessaging_Privacy:"
+          xcodebuild -project Pods/Pods.xcodeproj -target "FirebaseMessaging-FirebaseMessaging_Privacy" -showBuildSettings | grep -E "DEVELOPMENT_TEAM|CODE_SIGN" | head -n 10 || echo "Could not verify Pod signing settings"
+          
+          echo ""
+          echo "✅ Pod targets code signing configuration complete"
+          cd ..
 
       - name: Setup SSH for Fastlane Match
         run: |
