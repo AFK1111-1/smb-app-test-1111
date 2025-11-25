@@ -3,6 +3,9 @@ name: QA Release Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   qa-build:
     runs-on: macos-15
