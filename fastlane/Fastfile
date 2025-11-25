@@ -160,9 +160,6 @@ platform :ios do
       increment_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
     end
 
-    # Clean build artifacts before building
-    clean_build_artifacts
-
     # Build configuration
     build_config = {
       workspace: "ios/smbmobile.xcworkspace",
@@ -177,14 +174,11 @@ platform :ios do
         provisioningProfiles: {
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         },
-        teamID: "96W7U4JYV4",
-        signingCertificate: "iPhone Distribution",
-        iCloudContainerEnvironment: "Production"
+        teamID: "96W7U4JYV4"
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO -allowProvisioningUpdates",
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO -allowProvisioningUpdates",
       skip_profile_detection: true,
-      clean: true,
-      verbose: true
+      clean: true
     }
 
     # Add keychain arguments if keychain is specified

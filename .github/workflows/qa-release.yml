@@ -98,35 +98,17 @@ jobs:
         run: |
           if [ -f GoogleService-Info.plist ]; then
             cp GoogleService-Info.plist ios/GoogleService-Info.plist
-            echo "✅ GoogleService-Info.plist copied to ios directory"
-          else
-            echo "⚠️ GoogleService-Info.plist not found in root"
           fi
 
       - name: Install CocoaPods dependencies
         run: |
           cd ios
-          echo "🔍 CocoaPods version:"
-          pod --version
-          
-          echo ""
-          echo "📦 Installing pods..."
-          pod install --verbose
-          
-          echo ""
-          echo "✅ Pod installation complete. Checking workspace:"
-          ls -la *.xcworkspace || echo "No workspace found"
-          
-          echo ""
-          echo "📋 Pods installed:"
-          ls -la Pods/ | head -n 20
+          pod install
           cd ..
       
       - name: Configure Pod Targets Code Signing
         run: |
           cd ios
-          
-          # Create a Ruby script to update Pod targets
           cat > fix_pod_signing.rb << 'RUBY_SCRIPT'
           require 'xcodeproj'
           
@@ -136,7 +118,6 @@ jobs:
           team_id = '96W7U4JYV4'
           
           project.targets.each do |target|
-            puts "Configuring target: #{target.name}"
             target.build_configurations.each do |config|
               config.build_settings['DEVELOPMENT_TEAM'] = team_id
               config.build_settings['CODE_SIGN_IDENTITY'] = ''
@@ -146,18 +127,9 @@ jobs:
           end
           
           project.save
-          puts "✅ All Pod targets configured with team ID: #{team_id}"
           RUBY_SCRIPT
           
-          echo "🔧 Configuring Pod targets for code signing..."
           ruby fix_pod_signing.rb
-          
-          echo ""
-          echo "🔍 Verifying Pod signing configuration for FirebaseMessaging-FirebaseMessaging_Privacy:"
-          xcodebuild -project Pods/Pods.xcodeproj -target "FirebaseMessaging-FirebaseMessaging_Privacy" -showBuildSettings | grep -E "DEVELOPMENT_TEAM|CODE_SIGN" | head -n 10 || echo "Could not verify Pod signing settings"
-          
-          echo ""
-          echo "✅ Pod targets code signing configuration complete"
           cd ..
 
       - name: Setup SSH for Fastlane Match
@@ -181,24 +153,10 @@ jobs:
 
       - name: Setup Xcode First Launch and Install iOS 18.1 Runtime
         run: |
-          echo "🔧 Running Xcode first launch..."
           sudo xcodebuild -runFirstLaunch
           sudo xcodebuild -license accept || echo "License already accepted"
-          
-          echo "📱 Available iOS runtimes before download:"
-          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
-          
-          echo "⬇️ Downloading iOS runtime..."
           sudo xcodebuild -downloadPlatform iOS || echo "Download command completed"
-          
-          echo "⏳ Waiting for installation to complete..."
           sleep 60
-          
-          echo "✅ Available iOS runtimes after download:"
-          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
-          
-          echo "📋 Available SDKs:"
-          xcodebuild -showsdks
 
       - name: Create temporary keychain
         run: |
@@ -230,45 +188,9 @@ jobs:
       - name: Unlock keychain
         run: |
           security unlock-keychain -p "${{ env.KEYCHAIN_PASSWORD }}" "${{ env.KEYCHAIN_NAME }}"
-      
-      - name: Verify iOS Project Setup
-        run: |
-          echo "📂 iOS project structure:"
-          ls -la ios/ || echo "ios directory not found"
-          
-          echo ""
-          echo "📱 Checking for GoogleService-Info.plist:"
-          ls -la ios/GoogleService-Info.plist || echo "GoogleService-Info.plist not found in ios/"
-          
-          echo ""
-          echo "🔐 Checking for provisioning profiles:"
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "No provisioning profiles found"
-          
-          echo ""
-          echo "🔑 Checking identities in keychain:"
-          security find-identity -v -p codesigning "${{ env.KEYCHAIN_NAME }}" || echo "No identities found"
-          
-          echo ""
-          echo "📦 Checking workspace:"
-          ls -la ios/*.xcworkspace || echo "No workspace found"
-          ls -la ios/*.xcodeproj || echo "No project found"
-          
-          echo ""
-          echo "🔍 Checking Xcode build settings:"
-          xcodebuild -workspace ios/smbmobile.xcworkspace -scheme smbmobile -showBuildSettings | grep -E "CODE_SIGN|PROVISIONING_PROFILE|TEAM" || echo "Could not retrieve build settings"
-          
-          echo ""
-          echo "🧪 Validating project configuration:"
-          xcodebuild -workspace ios/smbmobile.xcworkspace -scheme smbmobile -configuration Release -destination "generic/platform=iOS" clean || echo "Clean validation completed"
 
       - name: Build and Release iOS
-        run: |
-          echo "🚀 Starting iOS build..."
-          fastlane ios qa_release 2>&1 | tee build.log || {
-            echo "❌ Build failed, showing last 200 lines of output:"
-            tail -n 200 build.log
-            exit 1
-          }
+        run: fastlane ios qa_release
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -277,17 +199,6 @@ jobs:
           KEYCHAIN_NAME: ${{ env.KEYCHAIN_NAME }}
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 60
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 6
-
-      - name: Upload Build Logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: build-logs
-          path: |
-            ~/Library/Logs/gym/*.log
-            build.log
-          retention-days: 7
-          if-no-files-found: ignore
 
       - name: Cleanup keychain
         if: always()
