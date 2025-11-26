@@ -176,11 +176,23 @@ platform :ios do
         },
         teamID: "96W7U4JYV4"
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO",
-      skip_profile_detection: true
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO -allowProvisioningUpdates GCC_GENERATE_DEBUGGING_SYMBOLS=NO",
+      skip_profile_detection: true,
+      clean: true,
+      buildlog_path: "./fastlane_logs"
     }
 
+    # Add keychain arguments if keychain is specified
+    if ENV['KEYCHAIN_NAME'] && ENV['KEYCHAIN_PASSWORD']
+      build_config[:xcargs] += " OTHER_CODE_SIGN_FLAGS=\"--keychain #{ENV['KEYCHAIN_NAME']}\""
+    end
+
     # Build and archive
+    UI.message("🚀 Starting iOS build with configuration:")
+    UI.message("  Workspace: #{build_config[:workspace]}")
+    UI.message("  Scheme: #{build_config[:scheme]}")
+    UI.message("  Export method: #{build_config[:export_method]}")
+    
     build_ios_app(build_config)
 
     # Upload to TestFlight with auto-retry on duplicate build errors
