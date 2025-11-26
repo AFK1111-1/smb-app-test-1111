@@ -156,6 +156,13 @@ jobs:
         run: |
           security unlock-keychain -p "${{ env.KEYCHAIN_PASSWORD }}" "${{ env.KEYCHAIN_NAME }}"
 
+      - name: Clean Xcode build cache
+        run: |
+          rm -rf ~/Library/Developer/Xcode/DerivedData/*
+          cd ios
+          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile
+          cd ..
+
       - name: Build and Release iOS
         run: fastlane ios qa_release
         env:

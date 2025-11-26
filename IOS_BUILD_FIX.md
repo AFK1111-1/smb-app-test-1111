@@ -1,19 +1,61 @@
 # iOS Build Failure Fix for Xcode 16.1
 
 ## Problem
-PrecompileModule failure for RNFBApp and other modules when building with Xcode 16.1.
+PrecompileModule failure for RNFBApp and other modules when building with Xcode 16.1, plus iOS deployment target warnings.
 
-## Solutions Applied
+## Solutions Applied ✅
 
-### 1. ✅ Disabled Module Precompilation in app.config.ts
-Added `enableModulePrecompilation: false` to iOS build properties.
+### 1. ✅ Created Podfile Modification Plugin
+**File**: `plugins/withPodfileModifications.ts`
+- Fixes iOS deployment target from 9.0 to 12.0 (Xcode 16.1 requirement)
+- Disables module verification (`CLANG_ENABLE_MODULE_VERIFIER=NO`)
+- Disables explicit modules (`CLANG_ENABLE_EXPLICIT_MODULES=NO`)
+- Sets Swift compilation mode to `wholemodule`
+- Disables module debugging
 
-### 2. ✅ Updated Fastfile Build Flags
-Added `-skipPackagePluginValidation -skipMacroValidation` to xcargs.
+### 2. ✅ Updated app.config.ts
+- Disabled module precompilation with `enableModulePrecompilation: false`
+- Added new Podfile modification plugin to plugin array
+
+### 3. ✅ Updated Fastfile Build Flags
+Added proper Xcode build settings to xcargs:
+- `CLANG_ENABLE_MODULE_VERIFIER=NO`
+- `CLANG_ENABLE_EXPLICIT_MODULES=NO`
+
+### 4. ✅ Added Build Cache Cleanup in CI/CD
+Added step in `qa-release.yml` to clean derived data and run `xcodebuild clean` before building.
 
 ---
 
-## Additional Solutions (If Above Doesn't Work)
+## What Changed and Why
+
+### The Root Cause
+Xcode 16.1 introduced stricter module precompilation checks that are incompatible with:
+1. **React Native Firebase** (RNFBApp) module structure
+2. **Old iOS deployment targets** (iOS 9.0 is below the minimum 12.0)
+3. **Swift optimization levels** in Release builds
+
+### How We Fixed It
+1. **Podfile post_install hook**: Automatically fixes all pod targets during `pod install`
+2. **Build settings**: Disables problematic module verification at build time
+3. **Clean build**: Ensures no cached artifacts cause conflicts
+4. **Expo config**: Prevents module precompilation from being enabled
+
+---
+
+## Expected Build Behavior
+
+After these changes, you should see:
+- ✅ No more `PrecompileModule` errors
+- ✅ No more deployment target warnings
+- ✅ Swift optimization warnings are **expected** and **safe to ignore**
+- ⏱️ First build after changes may take longer due to clean cache
+
+**Note**: The Swift optimization warnings (`SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone`) are **cosmetic** and do not affect the build. They only disable Xcode previews.
+
+---
+
+## Additional Solutions (If Above Still Doesn't Work)
 
 ### Option A: Force Xcode Version in CI/CD
 If your CI/CD supports multiple Xcode versions, force an earlier version:

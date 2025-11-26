@@ -70,6 +70,7 @@ export default {
         },
       ],
       ['./plugins/withPlugin.ts'],
+      ['./plugins/withPodfileModifications.ts'],
     ],
     experiments: {
       typedRoutes: true,
