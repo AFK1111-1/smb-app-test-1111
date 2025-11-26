@@ -16,7 +16,6 @@ export default {
       supportsTablet: true,
       buildNumber: '1',
       bundleIdentifier: 'com.insighture.smbmobile',
-      appleTeamId: '96W7U4JYV4',
       infoPlist: {
         NSCameraUsageDescription:
           'Take a photo to use as your profile picture.',
@@ -62,7 +61,6 @@ export default {
         {
           ios: {
             useFrameworks: 'static',
-            deploymentTarget: '15.1',
           },
           android: {
             enableProguardInReleaseBuilds: true,

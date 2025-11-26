@@ -5,7 +5,7 @@ on:
 
 jobs:
   qa-build:
-    runs-on: macos-14
+    runs-on: macos-15
     name: Build QA Release
     permissions: write-all
 
@@ -16,8 +16,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          cache: npm
           node-version: '18'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -53,9 +53,7 @@ jobs:
 
       # - name: Setup Google Play Service Key
       #   run: |
-      #     echo "$GOOGLE_PLAY_SERVICE_KEY" | base64 --decode > credentials/android/google-play-service-key.json
-      #   env:
-      #     GOOGLE_PLAY_SERVICE_KEY: ${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}
+      #     echo "${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}" | base64 --decode > credentials/android/google-play-service-key.json
 
       # - name: Setup Google Services JSON for Android
       #   run: >
@@ -77,7 +75,7 @@ jobs:
       #   with:
       #     name: android-release-aab
       #     path: android/app/build/outputs/bundle/release/app-release.aab
-      #     retention-days: '30'
+      #     retention-days: 30
 
       - name: Setup Apple API Key
         run: |
@@ -85,7 +83,7 @@ jobs:
             sed 's/-----BEGIN PRIVATE KEY-----//g' | \
             sed 's/-----END PRIVATE KEY-----//g' | \
             tr -d ' \n\r\t')
-          
+
           echo "-----BEGIN PRIVATE KEY-----" > credentials/ios/AuthKey.p8
           echo "$base64_content" | fold -w 64 >> credentials/ios/AuthKey.p8
           echo "-----END PRIVATE KEY-----" >> credentials/ios/AuthKey.p8
@@ -99,130 +97,43 @@ jobs:
 
       - name: Expo Prebuild for iOS
         run: npm run prebuild -- --platform ios --clean
-      
-      - name: Move GoogleService-Info.plist to iOS directory
-        run: |
-          if [ -f GoogleService-Info.plist ]; then
-            cp GoogleService-Info.plist ios/GoogleService-Info.plist
-            echo "✅ GoogleService-Info.plist copied to ios/"
-          else
-            echo "⚠️ GoogleService-Info.plist not found!"
-          fi
 
       - name: Install CocoaPods dependencies
         run: |
           cd ios
           pod install
           cd ..
-      
-      - name: Configure Pod Targets Code Signing
-        run: |
-          cd ios
-          cat > fix_pod_signing.rb << 'RUBY_SCRIPT'
-          require 'xcodeproj'
-          
-          project_path = 'Pods/Pods.xcodeproj'
-          project = Xcodeproj::Project.open(project_path)
-          
-          team_id = '96W7U4JYV4'
-          min_ios_version = '15.1'
-          
-          project.targets.each do |target|
-            target.build_configurations.each do |config|
-              # Set team ID and deployment target for all pods
-              config.build_settings['DEVELOPMENT_TEAM'] = team_id
-              config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = min_ios_version
-              
-              # Aggressively disable all forms of precompilation and module caching
-              config.build_settings['ENABLE_PRECOMPILED_HEADERS'] = 'NO'
-              config.build_settings['GCC_PRECOMPILE_PREFIX_HEADER'] = 'NO'
-              config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
-              config.build_settings['CLANG_ENABLE_MODULES'] = 'YES'
-              config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
-              config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Owholemodule'
-              
-              # Disable code signing for resource bundles and privacy manifests
-              if target.name.include?('_Privacy') || 
-                 target.name.include?('_privacy') ||
-                 target.name.include?('Resources') || 
-                 target.name.include?('_resources')
-                config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
-                config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
-                config.build_settings['CODE_SIGN_IDENTITY'] = ''
-              end
-            end
-          end
-          
-          project.save
-          puts "✅ Updated #{project.targets.count} Pod targets"
-          RUBY_SCRIPT
-          
-          ruby fix_pod_signing.rb
-          cd ..
-      
-      - name: Configure Main Project Build Settings
-        run: |
-          cd ios
-          cat > fix_main_project.rb << 'RUBY_SCRIPT'
-          require 'xcodeproj'
-          
-          project_path = 'smbmobile.xcodeproj'
-          project = Xcodeproj::Project.open(project_path)
-          
-          project.targets.each do |target|
-            if target.name == 'smbmobile'
-              target.build_configurations.each do |config|
-                # Disable precompilation for the main target as well
-                config.build_settings['ENABLE_PRECOMPILED_HEADERS'] = 'NO'
-                config.build_settings['GCC_PRECOMPILE_PREFIX_HEADER'] = 'NO'
-                config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
-              end
-            end
-          end
-          
-          project.save
-          puts "✅ Updated main project build settings"
-          RUBY_SCRIPT
-          
-          ruby fix_main_project.rb
-          cd ..
-      
-      - name: Verify Build Settings
-        run: |
-          cd ios
-          echo "🔍 Checking RNFBApp Pod build settings..."
-          xcodebuild -project Pods/Pods.xcodeproj -target RNFBApp -showBuildSettings -configuration Release 2>/dev/null | grep -E "ENABLE_PRECOMPILED_HEADERS|GCC_PRECOMPILE_PREFIX_HEADER|CLANG_ENABLE_MODULE_DEBUGGING|DEVELOPMENT_TEAM|IPHONEOS_DEPLOYMENT_TARGET" || echo "⚠️ Could not find RNFBApp target"
-          echo ""
-          echo "🔍 Checking main project build settings..."
-          xcodebuild -workspace smbmobile.xcworkspace -scheme smbmobile -showBuildSettings -configuration Release 2>/dev/null | grep -E "ENABLE_PRECOMPILED_HEADERS|GCC_PRECOMPILE_PREFIX_HEADER|CLANG_ENABLE_MODULE_DEBUGGING" | head -n 10 || echo "⚠️ Could not retrieve main project settings"
-          cd ..
 
       - name: Setup SSH for Fastlane Match
         run: |
           mkdir -p ~/.ssh
+
           if echo "$FASTLANE_MATCH_DEPLOY_KEY" | head -c 5 | grep -q "^-----"; then
             echo "$FASTLANE_MATCH_DEPLOY_KEY" > ~/.ssh/id_rsa
           else
             echo "$FASTLANE_MATCH_DEPLOY_KEY" | base64 --decode > ~/.ssh/id_rsa
           fi
+
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
         env:
           FASTLANE_MATCH_DEPLOY_KEY: ${{ secrets.FASTLANE_MATCH_DEPLOY_KEY }}
 
-      - name: Setup Xcode 15.4
+      - name: Setup Xcode 16.1
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '15.4'
+          xcode-version: '16.1'
 
-      - name: Setup Xcode First Launch
+      - name: Setup Xcode First Launch and Install iOS 18.1 Runtime
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcodebuild -license accept || echo "License already accepted"
-          echo "📱 Available iOS runtimes:"
           xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
-          echo "📋 Available SDKs:"
-          xcodebuild -showsdks
+          sudo xcodebuild -downloadPlatform iOS &
+          DOWNLOAD_PID=$!
+          wait $DOWNLOAD_PID || echo "Download process finished"
+          sleep 30
+          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
 
       - name: Create temporary keychain
         run: |
@@ -230,8 +141,10 @@ jobs:
           KEYCHAIN_NAME="build.keychain"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
           echo "KEYCHAIN_NAME=$KEYCHAIN_NAME" >> $GITHUB_ENV
+          
           security delete-keychain "$KEYCHAIN_NAME" 2>/dev/null || true
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          
           EXISTING_KEYCHAINS=$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')
           security list-keychains -d user -s "$KEYCHAIN_NAME" $EXISTING_KEYCHAINS
           security default-keychain -s "$KEYCHAIN_NAME"
@@ -242,92 +155,9 @@ jobs:
       - name: Unlock keychain
         run: |
           security unlock-keychain -p "${{ env.KEYCHAIN_PASSWORD }}" "${{ env.KEYCHAIN_NAME }}"
-      
-      - name: Clean Xcode Build Cache
-        run: |
-          echo "🧹 Cleaning Xcode derived data and module cache..."
-          rm -rf ~/Library/Developer/Xcode/DerivedData/*
-          rm -rf ~/Library/Caches/org.swift.swiftpm
-          echo "✅ Cache cleaned"
-      
-      - name: Verify iOS Project Setup
-        run: |
-          echo "📱 Checking GoogleService-Info.plist..."
-          ls -lh ios/GoogleService-Info.plist || echo "❌ Missing GoogleService-Info.plist"
-          if [ -f ios/GoogleService-Info.plist ]; then
-            echo "✅ File exists, checking if it's valid XML..."
-            head -n 5 ios/GoogleService-Info.plist
-          fi
-          
-          echo ""
-          echo "🔥 Checking Firebase pods..."
-          ls -la ios/Pods/ | grep -i firebase || echo "No Firebase pods found"
-          
-          echo ""
-          echo "🔐 Checking provisioning profiles..."
-          ls ~/Library/MobileDevice/Provisioning\ Profiles/ | wc -l
-          
-          echo ""
-          echo "🔑 Checking signing identity..."
-          security find-identity -v -p codesigning "${{ env.KEYCHAIN_NAME }}" | grep "iPhone Distribution" || echo "❌ No distribution identity found"
-          
-          echo ""
-          echo "📦 Checking workspace..."
-          ls -lh ios/smbmobile.xcworkspace || echo "❌ Workspace not found"
 
       - name: Build and Release iOS
-        run: |
-          set -o pipefail
-          fastlane ios qa_release 2>&1 | tee fastlane-output.log || {
-            EXIT_CODE=$?
-            echo "================================"
-            echo "❌ Build failed with exit code: $EXIT_CODE"
-            echo "================================"
-            echo ""
-            
-            # Try to find the build log in multiple locations
-            BUILD_LOG=""
-            if [ -f fastlane_logs/smbmobile-smbmobile.log ]; then
-              BUILD_LOG="fastlane_logs/smbmobile-smbmobile.log"
-            elif [ -f ~/Library/Logs/gym/smbmobile-smbmobile.log ]; then
-              BUILD_LOG="~/Library/Logs/gym/smbmobile-smbmobile.log"
-            fi
-            
-            if [ -n "$BUILD_LOG" ]; then
-              echo "=== XCODEBUILD ERROR DETAILS (from $BUILD_LOG) ==="
-              
-              # Look for PrecompileModule errors
-              if grep -q "PrecompileModule" "$BUILD_LOG"; then
-                echo "🔍 Found PrecompileModule errors:"
-                grep -B 10 -A 30 "PrecompileModule.*failed\|PrecompileModule.*error" "$BUILD_LOG" | head -n 100
-                echo ""
-              fi
-              
-              # Look for error: messages
-              if grep -q "error:" "$BUILD_LOG"; then
-                echo "🔍 Found error: messages:"
-                grep -A 25 -B 5 "error:" "$BUILD_LOG" | head -n 150
-                echo ""
-              fi
-              
-              # Fallback to ARCHIVE FAILED context
-              if ! grep -q "error:\|PrecompileModule.*failed" "$BUILD_LOG"; then
-                echo "🔍 No specific errors found, showing ARCHIVE FAILED context:"
-                grep -A 50 "ARCHIVE FAILED\|failed\|FAILED" "$BUILD_LOG" | head -n 150 || {
-                  echo "🔍 Showing last 250 lines of build log:"
-                  tail -n 250 "$BUILD_LOG"
-                }
-              fi
-            else
-              echo "⚠️ Could not find build log file"
-            fi
-            
-            echo ""
-            echo "=== FASTLANE OUTPUT ERRORS ==="
-            grep -E "error:|failed:|clang:|PrecompileModule" fastlane-output.log | head -n 50 || echo "No explicit error lines found in fastlane output"
-            
-            exit $EXIT_CODE
-          }
+        run: fastlane ios qa_release
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -336,31 +166,20 @@ jobs:
           KEYCHAIN_NAME: ${{ env.KEYCHAIN_NAME }}
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 60
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 6
-      
-      - name: Upload Build Logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build-logs
-          path: |
-            ~/Library/Logs/gym/*.log
-            fastlane_logs/*.log
-            fastlane-output.log
-          retention-days: '7'
-          if-no-files-found: ignore
 
       - name: Cleanup keychain
         if: always()
         run: |
           security delete-keychain "${{ env.KEYCHAIN_NAME }}" 2>/dev/null || true
 
+
       - name: Upload iOS Release IPA
         uses: actions/upload-artifact@v4
         with:
           name: ios-release-ipa
           path: ios/build/smbmobile.ipa
-          retention-days: '30'
-      
+          retention-days: 30
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -373,7 +192,7 @@ jobs:
             - **Commit**: ${{ github.sha }}
             - **Branch**: ${{ github.ref_name }}
             - **Build Number**: ${{ github.run_number }}
-            - **Xcode**: 15.4 on macOS 14
+            - **Xcode**: 16.1 with iOS 18.1 runtime
             ### 🚀 Deployment
             - Android: Internal track on Google Play
             - iOS: TestFlight
