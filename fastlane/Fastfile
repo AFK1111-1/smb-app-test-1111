@@ -176,7 +176,7 @@ platform :ios do
         },
         teamID: "96W7U4JYV4"
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO -allowProvisioningUpdates GCC_GENERATE_DEBUGGING_SYMBOLS=NO",
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO -allowProvisioningUpdates GCC_GENERATE_DEBUGGING_SYMBOLS=NO CLANG_ENABLE_MODULE_DEBUGGING=NO ENABLE_PRECOMPILED_HEADERS=NO GCC_PRECOMPILE_PREFIX_HEADER=NO",
       skip_profile_detection: true,
       clean: true,
       buildlog_path: "./fastlane_logs"
