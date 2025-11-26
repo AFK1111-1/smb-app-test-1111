@@ -61,6 +61,7 @@ export default {
         {
           ios: {
             useFrameworks: 'static',
+            enableModulePrecompilation: false,
           },
           android: {
             enableProguardInReleaseBuilds: true,
