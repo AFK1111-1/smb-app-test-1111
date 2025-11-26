@@ -48,44 +48,44 @@ jobs:
           mkdir -p credentials/android
           mkdir -p credentials/ios
 
-      - name: Setup Android Keystore
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > credentials/android/release.keystore
+      # - name: Setup Android Keystore
+      #   run: |
+      #     echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > credentials/android/release.keystore
 
-      - name: Setup Google Play Service Key
-        run: |
-          echo "${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}" | base64 --decode > credentials/android/google-play-service-key.json
+      # - name: Setup Google Play Service Key
+      #   run: |
+      #     echo "${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}" | base64 --decode > credentials/android/google-play-service-key.json
 
-      - name: Setup Google Services JSON for Android
-        run: |
-          echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode > google-services.json
+      # - name: Setup Google Services JSON for Android
+      #   run: |
+      #     echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode > google-services.json
 
-      - name: Verify Android Keystore
-        run: |
-          if [ -f credentials/android/release.keystore ]; then
-            echo "✅ Keystore file exists"
-            ls -lh credentials/android/release.keystore
-          else
-            echo "❌ Keystore file not found"
-            exit 1
-          fi
+      # - name: Verify Android Keystore
+      #   run: |
+      #     if [ -f credentials/android/release.keystore ]; then
+      #       echo "✅ Keystore file exists"
+      #       ls -lh credentials/android/release.keystore
+      #     else
+      #       echo "❌ Keystore file not found"
+      #       exit 1
+      #     fi
 
-      - name: Expo Prebuild for Android
-        run: npm run prebuild -- --platform android --clean
+      # - name: Expo Prebuild for Android
+      #   run: npm run prebuild -- --platform android --clean
 
-      - name: Build and Release Android
-        run: fastlane android qa_release
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      # - name: Build and Release Android
+      #   run: fastlane android qa_release
+      #   env:
+      #     ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      #     ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      #     ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Upload Android Release AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          retention-days: 30
+      # - name: Upload Android Release AAB
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: android-release-aab
+      #     path: android/app/build/outputs/bundle/release/app-release.aab
+      #     retention-days: 30
 
       - name: Setup Apple API Key
         run: |
