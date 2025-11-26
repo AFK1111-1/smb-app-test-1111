@@ -60,6 +60,16 @@ jobs:
         run: |
           echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode > google-services.json
 
+      - name: Verify Android Keystore
+        run: |
+          if [ -f credentials/android/release.keystore ]; then
+            echo "✅ Keystore file exists"
+            ls -lh credentials/android/release.keystore
+          else
+            echo "❌ Keystore file not found"
+            exit 1
+          fi
+
       - name: Expo Prebuild for Android
         run: npm run prebuild -- --platform android --clean
 
