@@ -168,8 +168,12 @@ jobs:
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcodebuild -license accept || echo "License already accepted"
-          sudo xcodebuild -downloadPlatform iOS || echo "Download command completed"
-          sleep 60
+          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
+          sudo xcodebuild -downloadPlatform iOS &
+          DOWNLOAD_PID=$!
+          wait $DOWNLOAD_PID || echo "Download process finished"
+          sleep 30
+          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
 
       - name: Create temporary keychain
         run: |
