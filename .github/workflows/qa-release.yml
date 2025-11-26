@@ -99,11 +99,48 @@ jobs:
 
       - name: Expo Prebuild for iOS
         run: npm run prebuild -- --platform ios --clean
+      
+      - name: Move GoogleService-Info.plist to iOS directory
+        run: |
+          if [ -f GoogleService-Info.plist ]; then
+            cp GoogleService-Info.plist ios/GoogleService-Info.plist
+            echo "✅ GoogleService-Info.plist copied to ios/"
+          else
+            echo "⚠️ GoogleService-Info.plist not found!"
+          fi
 
       - name: Install CocoaPods dependencies
         run: |
           cd ios
           pod install
+          cd ..
+      
+      - name: Configure Pod Targets Code Signing
+        run: |
+          cd ios
+          cat > fix_pod_signing.rb << 'RUBY_SCRIPT'
+          require 'xcodeproj'
+          
+          project_path = 'Pods/Pods.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+          
+          team_id = '96W7U4JYV4'
+          min_ios_version = '13.4'
+          
+          project.targets.each do |target|
+            target.build_configurations.each do |config|
+              config.build_settings['DEVELOPMENT_TEAM'] = team_id
+              config.build_settings['CODE_SIGN_IDENTITY'] = ''
+              config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+              config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+              config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = min_ios_version
+            end
+          end
+          
+          project.save
+          RUBY_SCRIPT
+          
+          ruby fix_pod_signing.rb
           cd ..
 
       - name: Setup SSH for Fastlane Match
@@ -153,9 +190,47 @@ jobs:
       - name: Unlock keychain
         run: |
           security unlock-keychain -p "${{ env.KEYCHAIN_PASSWORD }}" "${{ env.KEYCHAIN_NAME }}"
+      
+      - name: Verify iOS Project Setup
+        run: |
+          echo "📱 Checking GoogleService-Info.plist..."
+          ls -lh ios/GoogleService-Info.plist || echo "❌ Missing GoogleService-Info.plist"
+          
+          echo ""
+          echo "🔐 Checking provisioning profiles..."
+          ls ~/Library/MobileDevice/Provisioning\ Profiles/ | wc -l
+          
+          echo ""
+          echo "🔑 Checking signing identity..."
+          security find-identity -v -p codesigning "${{ env.KEYCHAIN_NAME }}" | grep "iPhone Distribution" || echo "❌ No distribution identity found"
+          
+          echo ""
+          echo "📦 Checking workspace..."
+          ls -lh ios/smbmobile.xcworkspace || echo "❌ Workspace not found"
 
       - name: Build and Release iOS
-        run: fastlane ios qa_release
+        run: |
+          set -o pipefail
+          fastlane ios qa_release 2>&1 | tee fastlane-output.log || {
+            EXIT_CODE=$?
+            echo "================================"
+            echo "❌ Build failed with exit code: $EXIT_CODE"
+            echo "================================"
+            echo ""
+            echo "📋 Checking for detailed error logs..."
+            
+            if [ -f ~/Library/Logs/gym/smbmobile-smbmobile.log ]; then
+              echo ""
+              echo "=== LAST 150 LINES OF BUILD LOG ==="
+              tail -n 150 ~/Library/Logs/gym/smbmobile-smbmobile.log | grep -E "error:|warning:|failed|FAILED|Error|Archiving" || tail -n 150 ~/Library/Logs/gym/smbmobile-smbmobile.log
+            fi
+            
+            echo ""
+            echo "=== SEARCHING FOR ACTUAL ERRORS ==="
+            grep -i "error:" fastlane-output.log | head -n 20 || echo "No explicit errors found in output"
+            
+            exit $EXIT_CODE
+          }
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -165,6 +240,17 @@ jobs:
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 60
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 6
       
+      - name: Upload Build Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: |
+            ~/Library/Logs/gym/*.log
+            fastlane-output.log
+          retention-days: '7'
+          if-no-files-found: ignore
+
       - name: Cleanup keychain
         if: always()
         run: |

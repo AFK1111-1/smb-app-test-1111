@@ -62,6 +62,7 @@ export default {
         {
           ios: {
             useFrameworks: 'static',
+            deploymentTarget: '13.4',
           },
           android: {
             enableProguardInReleaseBuilds: true,
