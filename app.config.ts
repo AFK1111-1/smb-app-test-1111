@@ -45,8 +45,9 @@ export default {
       'expo-router',
       'expo-secure-store',
       'expo-localization',
-      '@react-native-firebase/app',
-      '@react-native-firebase/messaging',
+      // Manual Firebase configuration for React Native 0.76.5 with Swift AppDelegate
+      // Using 21.5.0 (stable) instead of 23.4.0 (compilation errors with RNFBMessagingModule.m)
+      ['./plugins/withFirebaseManual.ts'],
       [
         'expo-splash-screen',
         {
@@ -62,6 +63,7 @@ export default {
           ios: {
             useFrameworks: 'static',
             enableModulePrecompilation: false,
+            deploymentTarget: '15.1', // Required for Firebase 21.5.0 and Xcode 16.1
           },
           android: {
             enableProguardInReleaseBuilds: true,

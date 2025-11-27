@@ -4,7 +4,7 @@ import * as path from 'path';
 
 /**
  * Config plugin to add post_install hooks to Podfile for:
- * 1. Fixing iOS deployment target to minimum 12.0
+ * 1. Fixing iOS deployment target to minimum 15.1 (required for Firebase 21.5.0)
  * 2. Disabling module verification for Xcode 16.1 compatibility
  * 3. Setting Swift compilation mode
  */
@@ -29,10 +29,10 @@ const withPodfileModifications: ConfigPlugin = (config) => {
   post_install do |installer|
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-        # Fix deployment target - must be at least iOS 12.0 for Xcode 16.1
+        # Fix deployment target - must be at least iOS 15.1 for Firebase 21.5.0 and Xcode 16.1
         deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
-        if deployment_target && deployment_target.to_f < 12.0
-          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        if deployment_target && deployment_target.to_f < 15.1
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         end
 
         # Disable module verification - fixes PrecompileModule errors in Xcode 16.1
@@ -72,12 +72,12 @@ const withPodfileModifications: ConfigPlugin = (config) => {
             const closingEnd = match[2];
             
             const additionalConfig = `
-    # Xcode 16.1 compatibility fixes
+    # Xcode 16.1 and Firebase 21.5.0 compatibility fixes
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
-        if deployment_target && deployment_target.to_f < 12.0
-          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        if deployment_target && deployment_target.to_f < 15.1
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         end
         config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'

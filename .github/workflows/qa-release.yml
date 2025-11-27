@@ -91,17 +91,61 @@ jobs:
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
 
       - name: Setup Google Service Info Plist for iOS
-        run: >
-          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode >
-          GoogleService-Info.plist
+        run: |
+          echo "📝 Setting up GoogleService-Info.plist..."
+          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode > GoogleService-Info.plist
+          
+          # Verify the file was created and is valid
+          if [ -f "GoogleService-Info.plist" ]; then
+            echo "✅ GoogleService-Info.plist created successfully"
+            ls -lh GoogleService-Info.plist
+          else
+            echo "❌ Failed to create GoogleService-Info.plist"
+            exit 1
+          fi
 
       - name: Expo Prebuild for iOS
-        run: npm run prebuild -- --platform ios --clean
+        run: |
+          echo "🔨 Running Expo prebuild for iOS..."
+          npm run prebuild -- --platform ios --clean
+          
+          # Copy GoogleService-Info.plist to ios directory after prebuild
+          if [ -f "GoogleService-Info.plist" ]; then
+            cp GoogleService-Info.plist ios/smbmobile/
+            echo "✅ Copied GoogleService-Info.plist to ios/smbmobile/"
+          fi
 
       - name: Install CocoaPods dependencies
         run: |
           cd ios
-          pod install
+          
+          # Complete cleanup of CocoaPods
+          echo "🧹 Cleaning CocoaPods..."
+          pod deintegrate || echo "No previous pods to deintegrate"
+          rm -rf Pods Podfile.lock
+          rm -rf ~/Library/Caches/CocoaPods
+          rm -rf ~/.cocoapods
+          
+          # Update CocoaPods repo
+          echo "🔄 Updating CocoaPods repo..."
+          pod repo update
+          
+          # Install with verbose output
+          echo "📦 Installing pods..."
+          pod install --verbose
+          
+          # Verify critical Firebase pods were installed
+          echo "🔍 Verifying Firebase pods..."
+          if [ -d "Pods/RNFBApp" ] && [ -d "Pods/RNFBMessaging" ]; then
+            echo "✅ Firebase pods installed successfully"
+            echo "RNFBApp version:"
+            grep -A 1 "SPEC VERSION" Pods/RNFBApp/RNFBApp.podspec || echo "Version check skipped"
+          else
+            echo "❌ Firebase pods not found!"
+            ls -la Pods/ | grep -i firebase || echo "No Firebase directories found"
+            exit 1
+          fi
+          
           cd ..
 
       - name: Setup SSH for Fastlane Match
@@ -158,9 +202,17 @@ jobs:
 
       - name: Clean Xcode build cache
         run: |
+          echo "🧹 Cleaning Xcode caches..."
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
+          rm -rf ~/Library/Caches/com.apple.dt.Xcode
+          
           cd ios
-          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile
+          if [ -d "smbmobile.xcworkspace" ]; then
+            echo "🧹 Cleaning workspace..."
+            xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile || echo "Clean command completed with warnings"
+          else
+            echo "⚠️  Workspace not found yet, skipping xcodebuild clean"
+          fi
           cd ..
 
       - name: Build and Release iOS
