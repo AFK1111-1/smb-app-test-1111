@@ -45,8 +45,6 @@ export default {
       'expo-router',
       'expo-secure-store',
       'expo-localization',
-      '@react-native-firebase/app',
-      '@react-native-firebase/messaging',
       [
         'expo-splash-screen',
         {
@@ -62,6 +60,7 @@ export default {
           ios: {
             useFrameworks: 'static',
             enableModulePrecompilation: false,
+            deploymentTarget: '15.1',
           },
           android: {
             enableProguardInReleaseBuilds: true,
@@ -71,6 +70,7 @@ export default {
       ],
       ['./plugins/withPlugin.ts'],
       ['./plugins/withPodfileModifications.ts'],
+      ['./plugins/withFirebaseManual.ts'],
     ],
     experiments: {
       typedRoutes: true,

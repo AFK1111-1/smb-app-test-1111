@@ -4,7 +4,7 @@ import * as path from 'path';
 
 /**
  * Config plugin to add post_install hooks to Podfile for:
- * 1. Fixing iOS deployment target to minimum 12.0
+ * 1. Fixing iOS deployment target to minimum 15.1 (required for RN 0.76.x + Firebase)
  * 2. Disabling module verification for Xcode 16.1 compatibility
  * 3. Setting Swift compilation mode
  */
@@ -29,10 +29,10 @@ const withPodfileModifications: ConfigPlugin = (config) => {
   post_install do |installer|
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-        # Fix deployment target - must be at least iOS 12.0 for Xcode 16.1
+        # Fix deployment target - must be at least iOS 15.1 for RN 0.76.x + Firebase + New Architecture
         deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
-        if deployment_target && deployment_target.to_f < 12.0
-          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        if deployment_target && deployment_target.to_f < 15.1
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         end
 
         # Disable module verification - fixes PrecompileModule errors in Xcode 16.1
@@ -76,8 +76,8 @@ const withPodfileModifications: ConfigPlugin = (config) => {
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
-        if deployment_target && deployment_target.to_f < 12.0
-          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        if deployment_target && deployment_target.to_f < 15.1
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         end
         config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
