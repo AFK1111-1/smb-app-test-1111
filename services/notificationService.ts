@@ -7,6 +7,7 @@ import notifee, {
 import messaging, {
   FirebaseMessagingTypes,
 } from '@react-native-firebase/messaging';
+import firebase from '@react-native-firebase/app';
 import { Platform } from 'react-native';
 
 // Callback type for in-app notifications
@@ -39,9 +40,27 @@ type InAppNotificationCallback = (data: {
 
 class NotificationService {
   private inAppNotificationCallback: InAppNotificationCallback | null = null;
+  private isFirebaseAvailable: boolean = false;
 
   constructor() {
+    this.checkFirebaseAvailability();
     this.configure();
+  }
+
+  /**
+   * Checks if Firebase is properly configured.
+   * Returns false if Firebase config files are missing.
+   */
+  private checkFirebaseAvailability() {
+    try {
+      // Check if Firebase app exists
+      const app = firebase.app();
+      this.isFirebaseAvailable = !!app;
+    } catch (error) {
+      console.warn('Firebase is not configured. Push notifications will be disabled.');
+      console.warn('To enable push notifications, add google-services.json (Android) and GoogleService-Info.plist (iOS)');
+      this.isFirebaseAvailable = false;
+    }
   }
   /**
    * Configures the notification service by setting up permissions, channels, and handlers.
@@ -57,21 +76,35 @@ class NotificationService {
   async configure() {
     // Request permissions
     await this.requestPermission();
-    await messaging().subscribeToTopic('all_users');
 
-    // Register for remote messages (iOS)
-    if (Platform.OS === 'ios') {
-      await messaging().registerDeviceForRemoteMessages();
+    // Skip Firebase setup if not available
+    if (!this.isFirebaseAvailable) {
+      console.log('Skipping Firebase Cloud Messaging setup - Firebase not configured');
+      // Still set up local notification channels
+      await this.createChannel();
+      this.setupForegroundHandler();
+      return;
     }
 
-    // Create notification channel (Android)
-    await this.createChannel();
+    try {
+      await messaging().subscribeToTopic('all_users');
 
-    // Set up message handlers
-    this.setupMessageHandlers();
+      // Register for remote messages (iOS)
+      if (Platform.OS === 'ios') {
+        await messaging().registerDeviceForRemoteMessages();
+      }
 
-    // Set up foreground handler
-    this.setupForegroundHandler();
+      // Create notification channel (Android)
+      await this.createChannel();
+
+      // Set up message handlers
+      this.setupMessageHandlers();
+
+      // Set up foreground handler
+      this.setupForegroundHandler();
+    } catch (error) {
+      console.error('Error configuring Firebase messaging:', error);
+    }
   }
 
   /**
@@ -86,14 +119,18 @@ class NotificationService {
    * ```
    */
   async requestPermission() {
-    if (Platform.OS === 'ios') {
-      const authStatus = await messaging().requestPermission();
-      const enabled =
-        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+    if (Platform.OS === 'ios' && this.isFirebaseAvailable) {
+      try {
+        const authStatus = await messaging().requestPermission();
+        const enabled =
+          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-      if (enabled) {
-        console.log('Authorization status:', authStatus);
+        if (enabled) {
+          console.log('Authorization status:', authStatus);
+        }
+      } catch (error) {
+        console.error('Error requesting iOS messaging permission:', error);
       }
     }
 
@@ -131,30 +168,38 @@ class NotificationService {
    * Both handlers automatically call `displayNotification()` to show the notification.
    */
   setupMessageHandlers() {
-    // Background & Quit state messages
-    messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-      console.log('Message handled in the background!', remoteMessage);
-      await this.displayNotification(remoteMessage);
-    });
+    if (!this.isFirebaseAvailable) {
+      return;
+    }
 
-    // Foreground messages
-    messaging().onMessage(async (remoteMessage) => {
-      if (
-        !remoteMessage.notification?.title ||
-        !remoteMessage.notification?.body
-      ) {
-        return;
-      }
-      // Show in-app notification if callback is set
-      if (this.inAppNotificationCallback && remoteMessage.notification) {
-        this.inAppNotificationCallback({
-          title: remoteMessage.notification.title,
-          body: remoteMessage.notification.body,
-        });
-      }
+    try {
+      // Background & Quit state messages
+      messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+        console.log('Message handled in the background!', remoteMessage);
+        await this.displayNotification(remoteMessage);
+      });
 
-      await this.displayNotification(remoteMessage);
-    });
+      // Foreground messages
+      messaging().onMessage(async (remoteMessage) => {
+        if (
+          !remoteMessage.notification?.title ||
+          !remoteMessage.notification?.body
+        ) {
+          return;
+        }
+        // Show in-app notification if callback is set
+        if (this.inAppNotificationCallback && remoteMessage.notification) {
+          this.inAppNotificationCallback({
+            title: remoteMessage.notification.title,
+            body: remoteMessage.notification.body,
+          });
+        }
+
+        await this.displayNotification(remoteMessage);
+      });
+    } catch (error) {
+      console.error('Error setting up message handlers:', error);
+    }
   }
 
   /**
@@ -222,6 +267,11 @@ class NotificationService {
    * @returns The FCM token, or `null` if retrieval fails.
    */
   async getFCMToken() {
+    if (!this.isFirebaseAvailable) {
+      console.warn('Cannot get FCM token: Firebase is not configured');
+      return null;
+    }
+
     await this.requestPermission();
     try {
       // iOS requires explicit registration
@@ -280,6 +330,10 @@ class NotificationService {
    */
 
   onTokenRefresh(callback: (token: string) => any) {
+    if (!this.isFirebaseAvailable) {
+      console.warn('Cannot listen for token refresh: Firebase is not configured');
+      return () => {}; // Return empty unsubscribe function
+    }
     return messaging().onTokenRefresh(callback);
   }
 

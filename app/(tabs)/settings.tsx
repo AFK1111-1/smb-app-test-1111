@@ -1,28 +1,27 @@
-import SettingsLink from '@/components/SettingsLink';
-import SettingsThemeButton from '@/components/SettingsThemeButton';
-import { Button, Card } from '@/components/ui';
-import Avatar from '@/components/ui/Avatar/Avatar';
-import { ThemeScheme } from '@/constants/Colors';
-import { ROUTES } from '@/constants/routes';
+import React, { useMemo, useState } from 'react';
+import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { Text, Switch as PaperSwitch } from 'react-native-paper';
+import { router } from 'expo-router';
+import { useKindeAuth } from '@kinde/expo';
+import { useTranslation } from 'react-i18next';
 import { useAppTheme, useThemeContext } from '@/context/ThemeContext';
 import { useUserProfileData } from '@/context/UserAuthGuard';
-import { useKindeAuth } from '@kinde/expo';
-import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Text } from 'react-native-paper';
+import { AppColors } from '@/constants/Colors';
+import { Fonts } from '@/constants/Fonts';
+import { ROUTES } from '@/constants/routes';
+import Avatar from '@/components/ui/Avatar/Avatar';
+import { Card, MenuItem, Searchbar } from '@/components/ui';
+import { icons } from '@/assets/icons';
 
 export default function SettingsScreen() {
-  const { isDark, themeScheme, toggleTheme, handleThemeSchemeSwitch } =
-    useThemeContext();
   const { colors } = useAppTheme();
+  const { isDark, toggleTheme } = useThemeContext();
   const userProfile = useUserProfileData();
   const { logout } = useKindeAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [searchQuery, setSearchQuery] = useState('');
 
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleLogout = async () => {
     try {
@@ -36,215 +35,218 @@ export default function SettingsScreen() {
     router.push(`${ROUTES.SETTINGS}/${route}` as any);
   };
 
+  const handleEditProfile = () => {
+    router.push(ROUTES.PROFILE as any);
+  };
+
   return (
-    <KeyboardAwareScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{
-        paddingBottom: 20,
-        flexGrow: 1,
-      }}
-      enableOnAndroid
-      enableAutomaticScroll
-      extraScrollHeight={100}
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.container}>
-        <View>
-          <Text
-            style={{
-              color: colors.text,
-              textAlign: 'center',
-              paddingBottom: 20,
-              paddingTop: 20,
-            }}
-            variant="displaySmall"
-          >
-            {t('setting.title')}
-          </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Settings</Text>
         </View>
-        <View
-          style={{
-            gap: 24,
-            paddingBottom: 20,
-          }}
-        >
-          {userProfile ? (
-            <View>
-              <View
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <View
-                  style={{
-                    borderRadius: 60,
-                    borderWidth: 2,
-                    overflow: 'hidden',
-                    borderColor: colors.secondaryLight,
-                  }}
-                >
-                  <Avatar uri={userProfile.avatar} size={120}/>
-                </View>
-              </View>
 
-              <View style={{ marginTop: 16, alignItems: 'center' }}>
-                <Text
-                  style={{
-                    color: colors.text,
-                  }}
-                  variant="titleLarge"
-                >
-                  {`${userProfile.firstName} ${userProfile.lastName}`}
-                </Text>
-                <Text
-                  style={{
-                    color: colors.text,
-                  }}
-                  variant="bodyMedium"
-                >
-                  {userProfile.email || t('setting.messages.noEmail')}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <Text>{t('setting.messages.noProfile')}</Text>
-          )}
-          <Card>
-            <View
-              style={{
-                gap: 8,
-                paddingVertical: 12,
-              }}
-            >
-              <SettingsLink
-                title={t('setting.items.privacy')}
-                icon="shield-sync-outline"
-                onPress={() => handleNavigation('privacy')}
-              />
-              <SettingsLink
-                title={t('setting.items.language')}
-                icon="earth"
-                isLast
-                onPress={() => handleNavigation('language')}
-              />
-            </View>
-          </Card>
-          <Card>
-            <View
-              style={{
-                gap: 8,
-                paddingVertical: 12,
-              }}
-            >
-              <SettingsLink
-                title={t('setting.items.help')}
-                icon="help-circle-outline"
-                onPress={() => handleNavigation('help')}
-              />
-              <SettingsLink
-                title={t('setting.items.about')}
-                icon="information-outline"
-                onPress={() => handleNavigation('about')}
-              />
-              <SettingsLink
-                title={t('setting.items.feedback')}
-                icon="chat-processing-outline"
-                isLast
-              />
-            </View>
-          </Card>
+        <Searchbar
+          placeholder="Search"
+          onChangeText={setSearchQuery}
+          value={searchQuery}
+        />
 
-          <View>
-            <Text
-              style={{
-                fontSize: 16,
-                color: colors.text,
-                marginBottom: 12,
-              }}
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.profileRow}>
+            {/* Avatar */}
+            <View style={styles.avatarBorder}>
+              <Avatar uri={userProfile?.avatar || null} size={48} />
+            </View>
+
+            {/* Name and Email */}
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>
+                {userProfile
+                  ? `${userProfile.firstName} ${userProfile.lastName}`
+                  : 'John Alexander'}
+              </Text>
+              <Text style={styles.userEmail}>
+                {userProfile?.email || 'john.alexander@gmail.com'}
+              </Text>
+            </View>
+
+            {/* Edit Profile Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.editButton,
+                pressed && styles.editButtonPressed,
+              ]}
+              onPress={handleEditProfile}
             >
-              {t('setting.items.theme.mode.title')}
-            </Text>
-            <Card>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 8,
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingHorizontal: 18,
-                  paddingVertical: 12,
-                  borderRadius: 8,
-                  marginVertical: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    color: colors.text,
-                  }}
-                >
-                  {t('setting.items.theme.mode.darkMode')}
-                </Text>
-                <Switch value={isDark} onValueChange={toggleTheme} />
-              </View>
-            </Card>
+              <icons.editIcon width={28} height={28} color={colors.text} />
+            </Pressable>
           </View>
+        </View>
 
-          <View
-            style={{
-              marginTop: 16,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 16,
-                color: colors.text,
-                marginBottom: 12,
-              }}
-            >
-              {t('setting.items.theme.scheme.title')}
-            </Text>
-            <Card>
-              <SettingsThemeButton
-                title={t('setting.items.theme.scheme.default')}
-                icon="theme-light-dark"
-                onPress={() => handleThemeSchemeSwitch(ThemeScheme.DEFAULT)}
-                isActive={themeScheme === ThemeScheme.DEFAULT}
-              />
+        {/* Menu Card */}
+        <View style={styles.menuCard}>
+          <View style={styles.menuContainer}>
+            <MenuItem
+              title="Dark Mode"
+              icon="moonIcon"
+              showChevron={false}
+              rightElement={
+                <PaperSwitch
+                  value={isDark}
+                  onValueChange={toggleTheme}
+                  color={colors.primary}
+                />
+              }
+            />
 
-              <SettingsThemeButton
-                title={t('setting.items.theme.scheme.highContrast')}
-                icon="contrast-circle"
-                onPress={() =>
-                  handleThemeSchemeSwitch(ThemeScheme.HIGH_CONTRAST)
-                }
-                isActive={themeScheme === ThemeScheme.HIGH_CONTRAST}
-              />
-              <SettingsThemeButton
-                title={t('setting.items.theme.scheme.vibrantRed')}
-                icon="palette-outline"
-                onPress={() => handleThemeSchemeSwitch(ThemeScheme.VIBRANT_RED)}
-                isActive={themeScheme === ThemeScheme.VIBRANT_RED}
-                isLast
-              />
-            </Card>
+            <MenuItem
+              title="Privacy"
+              icon="shieldIcon"
+              onPress={() => handleNavigation('privacy')}
+            />
+
+            <MenuItem
+              title="Language"
+              icon="globeIcon"
+              onPress={() => handleNavigation('language')}
+              rightText={i18n.language === 'en-US' ? 'English' : 'German'}
+              isLast
+            />
           </View>
-          <View>
-            <Button icon="logout" onPress={handleLogout} mode="contained">
-              {t('setting.actions.logout')}
-            </Button>
+        </View>
+
+        {/* Additional Options Card */}
+        <View style={styles.menuCard}>
+          <View style={styles.menuContainer}>
+            <MenuItem
+              title="Help"
+              icon="helpCircleIcon"
+              onPress={() => handleNavigation('help')}
+            />
+
+            <MenuItem
+              title="About"
+              icon="infoCircleIcon"
+              onPress={() => handleNavigation('about')}
+            />
+
+            <MenuItem
+              title="Send Feedback"
+              icon="chatIcon"
+              onPress={() => handleNavigation('feedback')}
+              isLast
+            />
           </View>
         </View>
       </View>
-    </KeyboardAwareScrollView>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 8,
-  },
-});
+const createStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    scrollView: {
+      flex: 1,
+      backgroundColor: colors.backgrounds.primary,
+    },
+    scrollContent: {
+      flexGrow: 1,
+    },
+    container: {
+      flex: 1,
+      paddingHorizontal: 15,
+      paddingTop: 40,
+      paddingBottom: 16,
+      gap: 24,
+    },
+    header: {
+      alignItems: 'center',
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontFamily: Fonts.medium,
+      lineHeight: 24,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    profileCard: {
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      borderWidth: 3,
+      borderColor: colors.secondaryDarker,
+      paddingTop: 16,
+      paddingBottom: 16,
+      paddingHorizontal: 24,
+      shadowColor: colors.secondaryLight,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 1,
+      shadowRadius: 1,
+      elevation: 1,
+    },
+    menuCard: {
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      borderWidth: 2,
+      borderColor: colors.secondaryDarker,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+      shadowColor: colors.secondaryLight,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 1,
+      shadowRadius: 1,
+      elevation: 1,
+    },
+    profileRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    avatarBorder: {
+      width: 48,
+      height: 48,
+      borderRadius: 999,
+      borderWidth: 2,
+      borderColor: colors.secondaryDarker,
+      overflow: 'hidden',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    userInfo: {
+      flex: 1,
+      gap: 0,
+    },
+    userName: {
+      fontSize: 20,
+      fontFamily: Fonts.medium,
+      lineHeight: 20,
+      color: colors.text,
+    },
+    userEmail: {
+      fontSize: 14,
+      fontFamily: Fonts.regular,
+      lineHeight: 20,
+      color: colors.textMuted,
+    },
+    editButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      color: colors.text,
+      backgroundColor: colors.backgrounds.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editButtonPressed: {
+      opacity: 0.7,
+    },
+    menuContainer: {
+      width: '100%',
+    },
+  });

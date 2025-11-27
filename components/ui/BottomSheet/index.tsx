@@ -70,7 +70,7 @@ const BottomSheet = forwardRef<BottomSheetGorhom, BottomSheetProps>(
           onPress={onOutsidePress}
         />
       ),
-      [showBackdrop, onOutsidePress, backdropProps],
+      [onOutsidePress, backdropProps],
     );
 
     return (

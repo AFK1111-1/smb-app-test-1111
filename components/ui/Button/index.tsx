@@ -10,6 +10,7 @@ import { useAppTheme } from '@/context/ThemeContext';
 interface ButtonProps extends PaperButtonProps {
   iconPosition?: 'left' | 'right';
   buttonColor?: 'primary' | 'error' | string;
+  size?: number;
 }
 
 const Button = (props: ButtonProps) => {
@@ -21,6 +22,7 @@ const Button = (props: ButtonProps) => {
     buttonColor = 'primary',
     mode = 'contained',
     textColor,
+    size = 48,
     ...rest
   } = props;
 
@@ -33,6 +35,15 @@ const Button = (props: ButtonProps) => {
       flexDirection: iconPosition === 'right' ? 'row-reverse' : 'row',
     }),
     [iconPosition],
+  );
+
+  const sizeStyle: StyleProp<ViewStyle> = useMemo(
+    () => ({
+      height: size,
+      justifyContent: 'center',
+      alignItems: 'center',
+    }),
+    [size],
   );
 
   const dynamicProps = useMemo(() => {
@@ -80,7 +91,7 @@ const Button = (props: ButtonProps) => {
       buttonColor={dynamicProps.buttonColor}
       textColor={dynamicProps.textColor || textColor}
       style={[styles.button, dynamicProps.style, style]}
-      contentStyle={[styles.content, directionStyle, contentStyle]}
+      contentStyle={[styles.content, directionStyle, sizeStyle, contentStyle]}
       labelStyle={[styles.label, labelStyle]}
     />
   );
@@ -94,7 +105,7 @@ const createStyles = (colors: AppColors) =>
       borderRadius: 8,
     },
     content: {
-      paddingVertical: 8,
+      paddingVertical: 0,
     },
     label: {
       fontSize: 16,
