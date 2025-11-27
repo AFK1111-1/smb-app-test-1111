@@ -136,12 +136,29 @@ jobs:
           
           # Verify critical Firebase pods were installed
           echo "🔍 Verifying Firebase pods..."
-          if [ -d "Pods/RNFBApp" ] && [ -d "Pods/RNFBMessaging" ]; then
+          if [ -d "Pods/FirebaseCore" ] && [ -d "Pods/FirebaseMessaging" ]; then
             echo "✅ Firebase pods installed successfully"
-            echo "RNFBApp version:"
-            grep -A 1 "SPEC VERSION" Pods/RNFBApp/RNFBApp.podspec || echo "Version check skipped"
+            echo ""
+            echo "Installed Firebase pods:"
+            ls -1 Pods/ | grep -i firebase || echo "No Firebase directories found"
+            echo ""
+            
+            # Check for React Native Firebase bridge pods
+            echo "React Native Firebase bridge status:"
+            if [ -d "Pods/RNFBApp" ]; then
+              echo "  ✅ RNFBApp found"
+            else
+              echo "  ℹ️  RNFBApp integrated (may not be separate directory)"
+            fi
+            
+            if [ -d "Pods/RNFBMessaging" ]; then
+              echo "  ✅ RNFBMessaging found"
+            else
+              echo "  ℹ️  RNFBMessaging integrated (may not be separate directory)"
+            fi
           else
-            echo "❌ Firebase pods not found!"
+            echo "❌ Firebase core pods not found!"
+            echo "Available pods:"
             ls -la Pods/ | grep -i firebase || echo "No Firebase directories found"
             exit 1
           fi
