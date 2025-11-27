@@ -22,24 +22,12 @@ const TextInput = (props: TextInputProps) => {
   return (
     <View style={styles.inputWrapper}>
       {label && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
+        <View style={styles.labelContainer}>
           <Text variant="bodyLarge" style={styles.label}>
             {label}
           </Text>
           {props.optional && (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 1,
-              }}
-            >
+            <View style={styles.iconTextContainer}>
               <MaterialCommunityIcons
                 name="information-outline"
                 size={14}
@@ -94,6 +82,16 @@ const createStyles = (colors: AppColors) =>
     },
     optional: {
       color: colors.textSecondary,
+    },
+    labelContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    iconTextContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 1,
     },
   });
 

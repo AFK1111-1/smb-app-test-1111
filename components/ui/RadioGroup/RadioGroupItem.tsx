@@ -1,27 +1,30 @@
 import React from 'react';
 import { RadioButton, RadioButtonItemProps } from 'react-native-paper';
 import { StyleSheet } from 'react-native';
+import { Fonts } from '@/constants/Fonts';
+import { useAppTheme } from '@/context/ThemeContext';
 
 const RadioGroupItem = (props: RadioButtonItemProps) => {
+  const { colors } = useAppTheme();
+
   return (
     <RadioButton.Item
       {...props}
-      style={[styles.item, props.style]}
+      style={[{ backgroundColor: colors.radioButtonBg }, styles.item, props.style]}
       labelStyle={[styles.label, props.labelStyle]}
-      color="#007bff"
+      color={colors.radioButtonActive}
     />
   );
 };
 
 const styles = StyleSheet.create({
   item: {
-    backgroundColor: '#f8f9fa',
     marginBottom: 8,
     borderRadius: 5,
   },
   label: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: Fonts.medium,
   },
 });
 

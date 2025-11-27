@@ -2,13 +2,15 @@ import React from 'react';
 import { Button } from '@/components/ui';
 import { AppColors } from '@/constants/Colors';
 import { useAppTheme } from '@/context/ThemeContext';
+import { Fonts } from '@/constants/Fonts';
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Pressable } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text } from 'react-native-paper';
+import { router } from 'expo-router';
 
 export default function NotificationsScreen() {
   const { colors } = useAppTheme();
@@ -23,19 +25,24 @@ export default function NotificationsScreen() {
 
   return (
     <KeyboardAwareScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{
-        paddingBottom: 20,
-      }}
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollViewContent}
       enableOnAndroid
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.container}>
+        {/* Need to add a Back Button? */}
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Notifications
+          </Text>
+        </View>
+
         <View style={styles.tabContainer}>
           <Button
             onPress={() => setActiveTab('all')}
             style={styles.tabButton}
-            buttonColor={activeTab === 'all' ? colors.primary : colors.white}
+            buttonColor={activeTab === 'all' ? colors.primary : colors.elevation.level0}
             textColor={activeTab === 'all' ? colors.white : colors.secondary}
             labelStyle={styles.tabText}
             contentStyle={styles.contentStyle}
@@ -55,7 +62,7 @@ export default function NotificationsScreen() {
           <Button
             onPress={() => setActiveTab('unread')}
             style={[styles.tabButton]}
-            buttonColor={activeTab === 'unread' ? colors.primary : colors.white}
+            buttonColor={activeTab === 'unread' ? colors.primary : colors.elevation.level0}
             textColor={activeTab === 'unread' ? colors.white : colors.secondary}
             labelStyle={styles.tabText}
             contentStyle={styles.contentStyle}
@@ -151,73 +158,100 @@ const NotificationItem = ({
   };
 
   return (
-    <View
-      style={[
-        styles.notificationRow,
-        { backgroundColor: colors.secondaryDarker },
-      ]}
-    >
-      <View
-        style={{
-          flex: 1,
-          flexDirection: 'row',
-          gap: 12,
-          alignItems: 'flex-start',
-        }}
-      >
-        <MaterialCommunityIcons
-          name={iconMap[notificationType]}
-          size={24}
-          color={isRead ? colors.text : colors.primary}
-        />
-        <View style={{ flex: 1, flexDirection: 'row', gap: 4 }}>
-          <View style={{ flex: 1 }}>
-            <Text
-              variant="bodyLarge"
-              style={[styles.settingTitle, { color: colors.text }]}
-            >
+    <View style={styles.notificationRow}>
+      <View style={styles.notificationRowContent}>
+        {/* Icon Container */}
+        <View style={styles.iconContainer}>
+          <MaterialCommunityIcons
+            name={iconMap[notificationType]}
+            size={24}
+            color={isRead ? colors.textSecondary : colors.primary}
+          />
+        </View>
+
+        {/* Content */}
+        <View style={styles.notificationContent}>
+          <View style={styles.notificationHeader}>
+            <Text style={[styles.settingTitle, { color: colors.text }]}>
               {title}
             </Text>
-            {description && (
-              <Text
-                variant="bodyMedium"
-                style={[
-                  styles.settingDescription,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {description}
-              </Text>
-            )}
-          </View>
-          <View>
-            <Text
-              variant="labelSmall"
-              style={[styles.settingTime, { color: colors.textSecondary }]}
-            >
+            <Text style={[styles.settingTime, { color: colors.textSecondary }]}>
               {formatTime(createdAt)}
             </Text>
           </View>
+          {description && (
+            <Text
+              style={[styles.settingDescription, { color: colors.textSecondary }]}
+            >
+              {description}
+            </Text>
+          )}
         </View>
       </View>
     </View>
   );
 };
 
-// TODO:: REMOVE ANY
 const createStyles = (colors: AppColors) =>
   StyleSheet.create({
+    scrollView: {
+      flex: 1,
+      backgroundColor: colors.backgrounds.primary,
+    },
+    scrollViewContent: {
+      paddingBottom: 20,
+    },
     container: {
       flex: 1,
-      padding: 16,
-      gap: 32,
-      marginTop: 16,
+      paddingHorizontal: 18,
+      paddingTop: 41,
+      gap: 24,
+    },
+    notificationRowContent: {
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'flex-start',
+    },
+    iconContainer: {
+      width: 32,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notificationContent: {
+      flex: 1,
+      gap: 6,
+    },
+    notificationHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    backButton: {
+      padding: 8,
+      borderRadius: 38,
+    },
+    backButtonPressed: {
+      opacity: 0.7,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontFamily: Fonts.medium,
+      lineHeight: 24,
+      textAlign: 'center',
+      flex: 1,
     },
     section: {
-      gap: 12,
+      gap: 16,
     },
     sectionTitle: {
-      marginBottom: 8,
+      fontSize: 15,
+      fontFamily: Fonts.medium,
+      lineHeight: 20,
       color: colors.text,
     },
     settingRow: {
@@ -226,27 +260,34 @@ const createStyles = (colors: AppColors) =>
       justifyContent: 'space-between',
     },
     settingTitle: {
-      marginBottom: 8,
+      fontSize: 15,
+      fontFamily: Fonts.medium,
+      lineHeight: 20,
     },
     settingDescription: {
-      marginTop: 2,
-      opacity: 0.9,
+      fontSize: 13,
+      fontFamily: Fonts.light,
+      lineHeight: 14,
+      marginTop: 6,
     },
     notificationRow: {
+      backgroundColor: colors.card,
       borderRadius: 8,
-      paddingHorizontal: 16,
+      borderWidth: 0.5,
+      borderColor: colors.cardBorder,
+      paddingLeft: 10,
+      paddingRight: 16,
       paddingVertical: 16,
     },
     settingTime: {
-      marginTop: 2,
-      opacity: 0.7,
+      fontSize: 10,
       fontStyle: 'italic',
+      lineHeight: 20,
     },
     tabContainer: {
       flexDirection: 'row',
-      marginBottom: 8,
       justifyContent: 'flex-start',
-      gap: 8,
+      gap: 0,
     },
     tabText: {
       fontSize: 14,
@@ -255,10 +296,11 @@ const createStyles = (colors: AppColors) =>
       borderRadius: 35,
     },
     tabContent: {
-      gap: 32,
+      gap: 24,
     },
     contentStyle: {
-      paddingVertical: 0,
+      paddingVertical: 4,
+      paddingHorizontal: 20,
     },
   });
 
