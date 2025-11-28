@@ -317,10 +317,11 @@ platform :ios do
       workspace: "ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       configuration: "Release",
-      export_method: "app-store",
-      output_directory: "ios/build",
+      output_directory: "build/ios",
       output_name: "smbmobile.ipa",
-      destination: "generic/platform=iOS",
+      include_bitcode: false,
+      include_symbols: true,
+      export_method: "app-store",
       sdk: "iphoneos",
       export_options: {
         method: "app-store",
@@ -334,13 +335,18 @@ platform :ios do
       xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO SWIFT_OPTIMIZATION_LEVEL=Onone -allowProvisioningUpdates -UseModernBuildSystem=NO",
       skip_profile_detection: true,
       buildlog_path: "fastlane/logs",
-      verbose: true
+      verbose: true,
+      project: "ios/smbmobile.xcodeproj"
     }
     
     UI.message ""
     UI.important "🔨 Starting xcodebuild..."
     UI.message "This may take several minutes..."
     UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    # Store the current directory (should be project root)
+    project_root = Dir.pwd
+    UI.message "📁 Project root: #{project_root}"
     
     begin
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -364,18 +370,22 @@ platform :ios do
       UI.message "🔄 Cleaning build folder..."
       sh("rm -rf ~/Library/Developer/Xcode/DerivedData/*")
       
-      # Navigate to ios directory and clean
+      # Clean Xcode build
+      UI.message "🧹 Cleaning Xcode build..."
+      sh("xcodebuild clean -workspace ios/smbmobile.xcworkspace -scheme smbmobile")
+      
+      # Install pods with verbose output
+      UI.message "💎 Installing pods..."
       Dir.chdir("ios") do
-        sh("xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile")
-        
-        # Install pods with verbose output
-        UI.message "💎 Installing pods..."
         sh("pod install --repo-update --verbose")
       end
       
-      # Build the app with detailed logging
-      UI.message "🔨 Building application..."
-      build_ios_app(build_config)
+      # Ensure we're in the project root before building
+      Dir.chdir(project_root) do
+        # Build the app with detailed logging
+        UI.message "🔨 Building application..."
+        build_ios_app(build_config)
+      end
       
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       UI.success "✅ Build completed successfully!"
@@ -384,15 +394,17 @@ platform :ios do
       ipa_paths = [
         "ios/build/smbmobile.ipa",
         "ios/build/Release-iphoneos/smbmobile.ipa",
+        "build/ios/smbmobile.ipa",
         "build/smbmobile.ipa",
         "smbmobile.ipa"
       ]
       
       found_ipa = false
       ipa_paths.each do |path|
-        if File.exist?(path)
-          ipa_size = File.size(path) / 1024.0 / 1024.0
-          UI.success "✅ IPA found at: #{File.expand_path(path)} (#{ipa_size.round(2)} MB)"
+        full_path = File.join(project_root, path)
+        if File.exist?(full_path)
+          ipa_size = File.size(full_path) / 1024.0 / 1024.0
+          UI.success "✅ IPA found at: #{full_path} (#{ipa_size.round(2)} MB)"
           found_ipa = true
           break
         end
@@ -401,12 +413,14 @@ platform :ios do
       unless found_ipa
         UI.error "❌ Failed to locate IPA file. Check build logs for errors."
         UI.error "Searched in the following locations:"
-        ipa_paths.each { |p| UI.error "- #{File.expand_path(p)}" }
+        ipa_paths.each { |p| UI.error "- #{File.join(project_root, p)}" }
         
         # Additional debug information
         UI.error "\n📂 Directory contents:"
-        if Dir.exist?("ios/build")
-          UI.error "ios/build: #{Dir.glob('ios/build/**/*').join('\n')}"
+        build_dir = File.join(project_root, 'ios/build')
+        if Dir.exist?(build_dir)
+          UI.error "ios/build contents:"
+          Dir.glob(File.join(build_dir, '*')).each { |f| UI.error "- #{f}" }
         else
           UI.error "ios/build directory does not exist"
         end
