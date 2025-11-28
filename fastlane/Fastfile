@@ -354,14 +354,24 @@ platform :ios do
       UI.message "- npm: #{`npm -v`.strip}" rescue nil
       UI.message "- CocoaPods: #{`pod --version`.strip}" rescue nil
       
+      # Check if iOS directory exists, if not run expo prebuild
+      unless Dir.exist?("ios")
+        UI.message "🔄 iOS directory not found. Running 'expo prebuild'..."
+        sh("npx expo prebuild --clean --platform ios")
+      end
+      
       # Clean build folder before building
       UI.message "🔄 Cleaning build folder..."
       sh("rm -rf ~/Library/Developer/Xcode/DerivedData/*")
-      sh("cd ios && xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile")
       
-      # Install pods with verbose output
-      UI.message "💎 Installing pods..."
-      sh("cd ios && pod install --repo-update --verbose")
+      # Navigate to ios directory and clean
+      Dir.chdir("ios") do
+        sh("xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile")
+        
+        # Install pods with verbose output
+        UI.message "💎 Installing pods..."
+        sh("pod install --repo-update --verbose")
+      end
       
       # Build the app with detailed logging
       UI.message "🔨 Building application..."
@@ -370,10 +380,10 @@ platform :ios do
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       UI.success "✅ Build completed successfully!"
       
-      # Verify IPA was created (from our fastlane/ directory)
+      # Verify IPA was created
       ipa_paths = [
-        "../ios/build/smbmobile.ipa",
         "ios/build/smbmobile.ipa",
+        "ios/build/Release-iphoneos/smbmobile.ipa",
         "build/smbmobile.ipa",
         "smbmobile.ipa"
       ]
@@ -392,6 +402,14 @@ platform :ios do
         UI.error "❌ Failed to locate IPA file. Check build logs for errors."
         UI.error "Searched in the following locations:"
         ipa_paths.each { |p| UI.error "- #{File.expand_path(p)}" }
+        
+        # Additional debug information
+        UI.error "\n📂 Directory contents:"
+        if Dir.exist?("ios/build")
+          UI.error "ios/build: #{Dir.glob('ios/build/**/*').join('\n')}"
+        else
+          UI.error "ios/build directory does not exist"
+        end
       end
     rescue => ex
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
