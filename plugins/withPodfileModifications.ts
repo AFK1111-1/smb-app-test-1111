@@ -46,6 +46,16 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         
         # Disable module debugging (can cause issues with precompilation)
         config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
+        
+        # Fix for RNFBApp non-modular header error with Xcode 16.1
+        # Disable treating non-modular includes as errors
+        config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
+        
+        # For Firebase modules specifically, ensure warnings aren't treated as errors
+        if target.name.include?('RNFB') || target.name.include?('Firebase')
+          config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+          config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+        end
       end
     end
 
@@ -53,6 +63,7 @@ const withPodfileModifications: ConfigPlugin = (config) => {
     installer.pods_project.build_configurations.each do |config|
       config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
     end
   end`;
 
@@ -83,11 +94,17 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
         config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
         config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
+        config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
+        if target.name.include?('RNFB') || target.name.include?('Firebase')
+          config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+          config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+        end
       end
     end
     installer.pods_project.build_configurations.each do |config|
       config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
     end
 `;
             
