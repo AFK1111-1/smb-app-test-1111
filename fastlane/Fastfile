@@ -308,7 +308,7 @@ platform :ios do
     
     # Verify scheme exists
     UI.message "   - Verifying scheme..."
-    schemes = sh("xcodebuild -workspace #{workspace_path} -list | grep 'Schemes:' -A 100 || true", log: false)
+    schemes = sh("xcodebuild -workspace #{ruby_workspace_path} -list | grep 'Schemes:' -A 100 || true", log: false)
     UI.message "Available schemes:\n#{schemes}"
     
     # Build configuration
