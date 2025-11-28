@@ -62,6 +62,10 @@ export default {
           ios: {
             useFrameworks: 'static',
             enableModulePrecompilation: false,
+            extraPodspecProperties: {
+              'CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES': 'NO',
+              'GCC_TREAT_WARNINGS_AS_ERRORS': 'NO',
+            },
           },
           android: {
             enableProguardInReleaseBuilds: true,

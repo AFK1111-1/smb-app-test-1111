@@ -143,6 +143,18 @@ jobs:
           cat Podfile
           echo ""
           
+          echo "🔍 Checking if Podfile has post_install hook..."
+          if grep -q "post_install do |installer|" Podfile; then
+            echo "✅ post_install hook found in Podfile"
+            echo ""
+            echo "📝 Post-install section:"
+            grep -A 30 "post_install do |installer|" Podfile || echo "Could not extract post_install"
+          else
+            echo "❌ WARNING: post_install hook NOT found in Podfile!"
+            echo "The plugin may not have run correctly."
+          fi
+          echo ""
+          
           echo "🔄 Running pod install..."
           pod install --verbose
           echo ""
