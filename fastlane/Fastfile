@@ -245,12 +245,51 @@ platform :ios do
     UI.message "   - SDK: iphoneos"
     UI.message "   - Destination: generic/platform=iOS"
     UI.message "   - Team ID: 96W7U4JYV4"
+    UI.message ""
+    
+    # Debug: Show current directory and file structure
+    UI.message "🔍 Debug: Checking file system..."
+    UI.message "   - Current directory: #{Dir.pwd}"
+    UI.message "   - Fastlane directory: #{__dir__}"
+    
+    # List what's in the current directory
+    UI.message "   - Files in current directory:"
+    Dir.entries('.').select { |f| !f.start_with?('.') }.each do |f|
+      UI.message "     - #{f}#{File.directory?(f) ? '/' : ''}"
+    end
+    
+    # Check if ios directory exists
+    if Dir.exist?('ios')
+      UI.message "   - Files in ios/ directory:"
+      Dir.entries('ios').select { |f| !f.start_with?('.') }.first(20).each do |f|
+        UI.message "     - #{f}#{File.directory?("ios/#{f}") ? '/' : ''}"
+      end
+    else
+      UI.error "   - ❌ ios/ directory does not exist in current directory!"
+    end
+    
+    UI.message ""
     
     # Verify workspace exists
     workspace_path = "ios/smbmobile.xcworkspace"
+    absolute_workspace_path = File.expand_path(workspace_path)
+    
+    UI.message "   - Looking for workspace at: #{workspace_path}"
+    UI.message "   - Absolute path: #{absolute_workspace_path}"
+    UI.message "   - Workspace exists: #{File.exist?(workspace_path)}"
+    
     if File.exist?(workspace_path)
       UI.success "✅ Workspace found: #{workspace_path}"
     else
+      UI.error "❌ Workspace not found at: #{workspace_path}"
+      UI.error ""
+      UI.error "Troubleshooting information:"
+      UI.error "1. Check if Expo prebuild completed successfully"
+      UI.error "2. Check if pod install completed successfully"
+      UI.error "3. Verify the workspace was created in the correct location"
+      UI.error ""
+      UI.error "Current directory structure:"
+      system("ls -la ios/ 2>/dev/null || echo 'Cannot list ios/ directory'")
       UI.user_error! "❌ Workspace not found at: #{workspace_path}"
     end
     

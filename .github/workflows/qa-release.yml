@@ -119,16 +119,56 @@ jobs:
           echo "CocoaPods version: $(pod --version)"
           echo "Ruby version: $(ruby --version)"
           echo ""
+          
+          echo "🔍 Checking if ios directory exists..."
+          if [ ! -d "ios" ]; then
+            echo "❌ ERROR: ios directory does not exist!"
+            echo "Current directory: $(pwd)"
+            echo "Directory contents:"
+            ls -la
+            exit 1
+          fi
+          
           cd ios
+          echo "📝 Current directory: $(pwd)"
+          echo "📝 iOS directory contents:"
+          ls -la
+          echo ""
+          
           echo "📝 Checking Podfile..."
+          if [ ! -f "Podfile" ]; then
+            echo "❌ ERROR: Podfile not found!"
+            exit 1
+          fi
           cat Podfile
           echo ""
+          
           echo "🔄 Running pod install..."
           pod install --verbose
           echo ""
           echo "✅ Pod install completed"
-          echo "Pods installed:"
+          
+          echo ""
+          echo "📂 Checking generated files..."
+          echo "Pods directory:"
           ls -la Pods/ | head -n 20
+          echo ""
+          echo "Checking for workspace..."
+          if [ -d "smbmobile.xcworkspace" ]; then
+            echo "✅ Workspace created: smbmobile.xcworkspace"
+            ls -la smbmobile.xcworkspace/
+          else
+            echo "❌ ERROR: Workspace not created by pod install!"
+          fi
+          
+          echo ""
+          echo "Checking for project..."
+          if [ -d "smbmobile.xcodeproj" ]; then
+            echo "✅ Project exists: smbmobile.xcodeproj"
+          else
+            echo "⚠️  WARNING: Project not found!"
+          fi
+          
           cd ..
 
       - name: Setup SSH for Fastlane Match
@@ -288,11 +328,65 @@ jobs:
           echo "✅ DerivedData cleaned"
           
           echo ""
-          echo "Cleaning Xcode workspace..."
-          cd ios
-          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile || echo "⚠️  Clean failed, continuing anyway"
-          echo "✅ Xcode clean completed"
-          cd ..
+          echo "🔍 Verifying workspace before clean..."
+          if [ -d "ios/smbmobile.xcworkspace" ]; then
+            echo "✅ Workspace exists before clean"
+            echo "Cleaning Xcode workspace..."
+            cd ios
+            xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile || echo "⚠️  Clean failed, continuing anyway"
+            echo "✅ Xcode clean completed"
+            cd ..
+          else
+            echo "⚠️  WARNING: Workspace not found, skipping xcodebuild clean"
+            echo "Expected location: ios/smbmobile.xcworkspace"
+            echo "Current directory: $(pwd)"
+            echo "ios/ directory contents:"
+            ls -la ios/
+          fi
+      
+      - name: Final Verification Before Build
+        run: |
+          echo "🔍 ============================================="
+          echo "🔍 Final verification before Fastlane build"
+          echo "🔍 ============================================="
+          echo ""
+          echo "📍 Current directory: $(pwd)"
+          echo "📁 Project root contents:"
+          ls -la
+          echo ""
+          echo "📁 iOS directory contents:"
+          ls -la ios/
+          echo ""
+          echo "✅ Checking critical files..."
+          
+          if [ -d "ios/smbmobile.xcworkspace" ]; then
+            echo "✅ Workspace: ios/smbmobile.xcworkspace EXISTS"
+            ls -la ios/smbmobile.xcworkspace/
+          else
+            echo "❌ Workspace: ios/smbmobile.xcworkspace MISSING"
+          fi
+          
+          if [ -d "ios/smbmobile.xcodeproj" ]; then
+            echo "✅ Project: ios/smbmobile.xcodeproj EXISTS"
+          else
+            echo "❌ Project: ios/smbmobile.xcodeproj MISSING"
+          fi
+          
+          if [ -f "ios/Podfile" ]; then
+            echo "✅ Podfile: EXISTS"
+          else
+            echo "❌ Podfile: MISSING"
+          fi
+          
+          if [ -d "ios/Pods" ]; then
+            echo "✅ Pods directory: EXISTS ($(ls -1 ios/Pods | wc -l) items)"
+          else
+            echo "❌ Pods directory: MISSING"
+          fi
+          
+          echo ""
+          echo "🔍 Ready to run Fastlane..."
+          echo "============================================="
 
       - name: Build and Release iOS
         run: |
