@@ -196,19 +196,20 @@ jobs:
           puts "Opening project: #{project_path}"
           project = Xcodeproj::Project.open(project_path)
           
+          # Fix ALL Pod targets to ensure compatibility
           fixed_targets = []
           project.targets.each do |target|
-            # Fix Firebase and React Native Firebase targets
-            if target.name.include?('RNFB') || target.name.include?('Firebase') || 
-               target.name == 'RNFBApp' || target.name == 'RNFBMessaging'
-              
+            # Only modify Pod targets, not the main app
+            if target.name != 'smbmobile' && target.name != 'Pods-smbmobile'
               target.build_configurations.each do |config|
-                # Disable non-modular header warning
+                # Disable non-modular header warning for all pods
                 config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
-                # Don't treat warnings as errors for these modules
-                config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-                # Disable strict prototypes warning
-                config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+                
+                # For Firebase/RNFB targets, also disable warnings as errors
+                if target.name.include?('RNFB') || target.name.include?('Firebase')
+                  config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+                  config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+                end
               end
               
               fixed_targets << target.name
@@ -218,8 +219,9 @@ jobs:
           project.save
           
           puts ""
-          puts "✅ Fixed #{fixed_targets.length} targets:"
-          fixed_targets.each { |name| puts "   - #{name}" }
+          puts "✅ Modified #{fixed_targets.length} pod targets"
+          puts "Firebase/RNFB targets fixed:"
+          fixed_targets.select { |name| name.include?('RNFB') || name.include?('Firebase') }.each { |name| puts "   - #{name}" }
           puts ""
           puts "✅ Xcode project settings updated successfully!"
           RUBY
