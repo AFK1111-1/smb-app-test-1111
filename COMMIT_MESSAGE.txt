@@ -1,4 +1,4 @@
-fix: Restore iOS 18.1 SDK download to fix build destination error
+fix: Restore and streamline iOS 18.1 SDK download to fix build destination error
 
 Root Cause:
 - iOS 18.1 SDK was not installed on GitHub Actions runner
@@ -6,25 +6,28 @@ Root Cause:
 - Exit status: 70
 
 Changes Made:
-1. Restored iOS platform download step with improved verification
-2. Added SDK verification loop (6 retries, 10s each)
-3. Added explicit sdk: "iphoneos" to Fastfile build config
-4. Added comprehensive SDK availability checks
-5. Kept New Architecture enabled (required by react-native-reanimated 4.x)
+1. Restored iOS platform download step with streamlined verification
+2. Added critical 30-second wait after download for installation to settle
+3. Improved verification using xcrun simctl to check runtimes before/after
+4. Added explicit sdk: "iphoneos" to Fastfile build config
+5. Better error handling with specific checks for iphoneos18
+6. Kept New Architecture enabled (required by react-native-reanimated 4.x)
 
 Files Modified:
-- .github/workflows/qa-release.yml - Restored iOS SDK download
+- .github/workflows/qa-release.yml - Restored and improved iOS SDK download
 - fastlane/Fastfile - Added explicit SDK parameter
 - Documentation updated (IOS_BUILD_FIX.md, BUILD_ERROR_DEBUG_GUIDE.md, QUICK_FIX_REFERENCE.md)
 
 Expected Result:
 - iOS 18.1 SDK will be downloaded and verified before build
+- 30-second wait ensures installation completes properly
 - xcodebuild will find the correct destination
 - Build should proceed past the archiving stage
 - No more "iOS 18.1 is not installed" errors
 
 Testing:
 - Verbose logging added to track SDK installation
+- Before/after runtime state visibility
 - Build logs uploaded as artifacts for debugging
 - Multiple checkpoints to verify SDK availability
 

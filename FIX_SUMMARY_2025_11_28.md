@@ -26,30 +26,34 @@ The iOS platform download step was accidentally removed in a previous attempt to
 ```yaml
 - name: Setup Xcode First Launch and Install iOS 18.1 Runtime
   run: |
+    echo "=== Starting Xcode first launch and iOS 18.1 platform download ==="
     sudo xcodebuild -runFirstLaunch
     sudo xcodebuild -license accept || echo "License already accepted"
     
-    echo "=== Starting iOS 18.1 platform download ==="
+    echo "=== Current iOS runtimes BEFORE download ==="
+    xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
+    
+    echo "=== Initiating iOS platform download ==="
     sudo xcodebuild -downloadPlatform iOS &
     DOWNLOAD_PID=$!
     
-    echo "Waiting for iOS platform download..."
+    # Wait for download process to complete
     wait $DOWNLOAD_PID || echo "Download process finished"
     
-    # Verification loop (6 attempts, 10s each)
-    for i in {1..6}; do
-      if xcodebuild -showsdks | grep -q "iOS 18"; then
-        echo "✅ iOS 18.x SDK found!"
-        break
-      fi
-      sleep 10
-    done
+    # Give additional time for installation to settle (CRITICAL!)
+    echo "Waiting 30 seconds for installation to complete..."
+    sleep 30
     
-    # Final verification with exit on failure
-    if xcodebuild -showsdks | grep -q "iphoneos"; then
-      echo "✅ iOS SDK is available"
+    echo "=== iOS runtimes AFTER download ==="
+    xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
+    
+    # Verify iOS SDK is available
+    if xcodebuild -showsdks | grep -q "iphoneos18"; then
+      echo "✅ iOS 18.x SDK is installed and ready!"
+    elif xcodebuild -showsdks | grep -q "iphoneos"; then
+      echo "⚠️  iOS SDK found, but may not be 18.1. Continuing anyway..."
     else
-      echo "❌ WARNING: iOS SDK not found"
+      echo "❌ ERROR: No iOS SDK found!"
       exit 1
     fi
 ```

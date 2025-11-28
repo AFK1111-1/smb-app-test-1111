@@ -79,6 +79,7 @@ jobs:
 
       - name: Setup Apple API Key
         run: |
+          echo "🔐 Setting up Apple API Key..."
           base64_content=$(echo "$APP_STORE_CONNECT_API_KEY_BASE64" | \
             sed 's/-----BEGIN PRIVATE KEY-----//g' | \
             sed 's/-----END PRIVATE KEY-----//g' | \
@@ -87,21 +88,47 @@ jobs:
           echo "-----BEGIN PRIVATE KEY-----" > credentials/ios/AuthKey.p8
           echo "$base64_content" | fold -w 64 >> credentials/ios/AuthKey.p8
           echo "-----END PRIVATE KEY-----" >> credentials/ios/AuthKey.p8
+          
+          echo "✅ Apple API Key created successfully"
+          ls -lh credentials/ios/AuthKey.p8
         env:
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
 
       - name: Setup Google Service Info Plist for iOS
-        run: >
-          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode >
-          GoogleService-Info.plist
+        run: |
+          echo "📱 Setting up Google Service Info Plist..."
+          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode > GoogleService-Info.plist
+          echo "✅ GoogleService-Info.plist created"
+          ls -lh GoogleService-Info.plist
 
       - name: Expo Prebuild for iOS
-        run: npm run prebuild -- --platform ios --clean
+        run: |
+          echo "🔨 Starting Expo prebuild for iOS..."
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo ""
+          npm run prebuild -- --platform ios --clean
+          echo ""
+          echo "✅ Prebuild completed"
+          echo "Checking generated iOS directory..."
+          ls -la ios/
 
       - name: Install CocoaPods dependencies
         run: |
+          echo "📦 Installing CocoaPods dependencies..."
+          echo "CocoaPods version: $(pod --version)"
+          echo "Ruby version: $(ruby --version)"
+          echo ""
           cd ios
-          pod install
+          echo "📝 Checking Podfile..."
+          cat Podfile
+          echo ""
+          echo "🔄 Running pod install..."
+          pod install --verbose
+          echo ""
+          echo "✅ Pod install completed"
+          echo "Pods installed:"
+          ls -la Pods/ | head -n 20
           cd ..
 
       - name: Setup SSH for Fastlane Match
@@ -126,34 +153,29 @@ jobs:
 
       - name: Setup Xcode First Launch and Install iOS 18.1 Runtime
         run: |
+          echo "=== Starting Xcode first launch and iOS 18.1 platform download ==="
           sudo xcodebuild -runFirstLaunch
           sudo xcodebuild -license accept || echo "License already accepted"
           
-          echo "=== Checking current iOS runtimes ==="
+          echo ""
+          echo "=== Current iOS runtimes BEFORE download ==="
           xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
           
           echo ""
-          echo "=== Starting iOS 18.1 platform download ==="
+          echo "=== Initiating iOS platform download ==="
           sudo xcodebuild -downloadPlatform iOS &
           DOWNLOAD_PID=$!
+          echo "Download started with PID: $DOWNLOAD_PID"
           
-          echo "Waiting for iOS platform download (PID: $DOWNLOAD_PID)..."
-          wait $DOWNLOAD_PID || echo "Download process finished with exit code: $?"
+          # Wait for download process to complete
+          wait $DOWNLOAD_PID || echo "Download process finished"
           
-          echo ""
-          echo "Waiting for installation to complete..."
-          for i in {1..6}; do
-            echo "Checking attempt $i/6..."
-            sleep 10
-            if xcodebuild -showsdks | grep -q "iOS 18"; then
-              echo "✅ iOS 18.x SDK found!"
-              break
-            fi
-            echo "Still waiting for SDK installation..."
-          done
+          # Give additional time for installation to settle
+          echo "Waiting 30 seconds for installation to complete..."
+          sleep 30
           
           echo ""
-          echo "=== Verifying iOS runtimes after download ==="
+          echo "=== iOS runtimes AFTER download ==="
           xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
           
           echo ""
@@ -161,11 +183,13 @@ jobs:
           xcodebuild -showsdks
           
           echo ""
-          echo "=== Checking for iOS SDK ==="
-          if xcodebuild -showsdks | grep -q "iphoneos"; then
-            echo "✅ iOS SDK is available"
+          echo "=== Final verification ==="
+          if xcodebuild -showsdks | grep -q "iphoneos18"; then
+            echo "✅ iOS 18.x SDK is installed and ready!"
+          elif xcodebuild -showsdks | grep -q "iphoneos"; then
+            echo "⚠️  iOS SDK found, but may not be 18.1. Continuing anyway..."
           else
-            echo "❌ WARNING: iOS SDK not found"
+            echo "❌ ERROR: No iOS SDK found!"
             exit 1
           fi
           
@@ -184,30 +208,52 @@ jobs:
 
       - name: Create temporary keychain
         run: |
+          echo "🔑 Creating temporary keychain..."
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
           KEYCHAIN_NAME="build.keychain"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
           echo "KEYCHAIN_NAME=$KEYCHAIN_NAME" >> $GITHUB_ENV
           
+          echo "Deleting old keychain if exists..."
           security delete-keychain "$KEYCHAIN_NAME" 2>/dev/null || true
+          
+          echo "Creating new keychain: $KEYCHAIN_NAME"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
           
+          echo "Adding to keychain list..."
           EXISTING_KEYCHAINS=$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')
           security list-keychains -d user -s "$KEYCHAIN_NAME" $EXISTING_KEYCHAINS
+          
+          echo "Setting as default keychain..."
           security default-keychain -s "$KEYCHAIN_NAME"
+          
+          echo "Unlocking keychain..."
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          
+          echo "Configuring keychain settings..."
           security set-keychain-settings -t 3600 -u "$KEYCHAIN_NAME"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME" 2>/dev/null || true
+          
+          echo "✅ Keychain created and configured"
+          echo "Current keychains:"
+          security list-keychains
 
       - name: Unlock keychain
         run: |
+          echo "🔓 Unlocking keychain..."
           security unlock-keychain -p "${{ env.KEYCHAIN_PASSWORD }}" "${{ env.KEYCHAIN_NAME }}"
+          echo "✅ Keychain unlocked"
+          security show-keychain-info "${{ env.KEYCHAIN_NAME }}" || echo "Could not show keychain info"
 
       - name: Verify Xcode Workspace
         run: |
+          echo "🔍 Verifying Xcode workspace and project..."
           cd ios
+          echo ""
+          echo "=== iOS directory contents ==="
           ls -la
-          echo "Checking workspace..."
+          echo ""
+          echo "=== Checking workspace ==="
           if [ -d "smbmobile.xcworkspace" ]; then
             echo "✅ Workspace exists"
             ls -la smbmobile.xcworkspace/
@@ -217,21 +263,75 @@ jobs:
           fi
           
           echo ""
-          echo "Available schemes:"
+          echo "=== Checking project ==="
+          if [ -d "smbmobile.xcodeproj" ]; then
+            echo "✅ Project exists"
+            ls -la smbmobile.xcodeproj/
+          else
+            echo "❌ Project not found!"
+          fi
+          
+          echo ""
+          echo "=== Available schemes ==="
           xcodebuild -workspace smbmobile.xcworkspace -list
+          
+          echo ""
+          echo "=== Checking build settings ==="
+          xcodebuild -workspace smbmobile.xcworkspace -scheme smbmobile -showBuildSettings | grep -E "(PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGN|DEVELOPMENT_TEAM|PROVISIONING_PROFILE)" || echo "Could not retrieve build settings"
           cd ..
 
       - name: Clean Xcode build cache
         run: |
+          echo "🧹 Cleaning Xcode build cache..."
+          echo "Removing DerivedData..."
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
+          echo "✅ DerivedData cleaned"
+          
+          echo ""
+          echo "Cleaning Xcode workspace..."
           cd ios
-          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile || echo "Clean failed, continuing anyway"
+          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile || echo "⚠️  Clean failed, continuing anyway"
+          echo "✅ Xcode clean completed"
           cd ..
 
       - name: Build and Release iOS
         run: |
           set -o pipefail
+          echo "🚀 ============================================="
+          echo "🚀 Starting iOS build and release process"
+          echo "🚀 ============================================="
+          echo ""
+          echo "📋 Build Environment Information:"
+          echo "  - Xcode version: $(xcodebuild -version | head -n 1)"
+          echo "  - Xcode path: $(xcode-select -p)"
+          echo "  - iOS SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "  - iOS SDK path: $(xcrun --sdk iphoneos --show-sdk-path)"
+          echo "  - macOS version: $(sw_vers -productVersion)"
+          echo "  - Ruby version: $(ruby --version)"
+          echo "  - Fastlane version: $(fastlane --version | head -n 1)"
+          echo ""
+          echo "🔐 Code Signing Information:"
+          echo "  - Default keychain: $(security default-keychain)"
+          echo "  - Keychains: $(security list-keychains)"
+          echo ""
+          echo "📝 Environment Variables:"
+          echo "  - KEYCHAIN_NAME: $KEYCHAIN_NAME"
+          echo "  - APP_STORE_CONNECT_API_KEY_ID: ${APP_STORE_CONNECT_API_KEY_ID:0:10}..."
+          echo "  - APP_STORE_CONNECT_ISSUER_ID: ${APP_STORE_CONNECT_ISSUER_ID:0:10}..."
+          echo ""
+          echo "🏗️  Starting Fastlane build..."
+          echo "============================================="
+          echo ""
+          
           fastlane ios qa_release 2>&1 | tee build_output.log
+          
+          BUILD_EXIT_CODE=${PIPESTATUS[0]}
+          echo ""
+          echo "============================================="
+          echo "🏁 Fastlane process completed with exit code: $BUILD_EXIT_CODE"
+          echo "============================================="
+          
+          exit $BUILD_EXIT_CODE
         continue-on-error: true
         id: ios_build
         env:
@@ -244,23 +344,120 @@ jobs:
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 6
           FASTLANE_HIDE_GITHUB_ISSUES: 1
           FASTLANE_SKIP_UPDATE_CHECK: 1
+          FASTLANE_XCODE_LIST_TIMEOUT: 60
+          DEBUG: 1
 
       - name: Extract and Display Build Errors
         if: steps.ios_build.outcome == 'failure'
         run: |
-          echo "=== BUILD FAILED ==="
-          echo "Extracting compilation errors from build output..."
+          echo "❌ ============================================="
+          echo "❌ BUILD FAILED - Extracting Error Information"
+          echo "❌ ============================================="
           echo ""
           
-          # Extract error lines
-          grep -E "(error:|❌|ld:|Undefined symbol|duplicate symbol|No such module|framework not found)" build_output.log || echo "No specific error patterns found"
+          echo "📊 Build output file size: $(wc -l < build_output.log) lines"
+          echo ""
+          
+          # Extract various error patterns
+          echo "🔍 === COMPILATION ERRORS ==="
+          if grep -E "error:" build_output.log > /tmp/compilation_errors.txt 2>/dev/null; then
+            echo "Found $(wc -l < /tmp/compilation_errors.txt) error lines:"
+            head -n 50 /tmp/compilation_errors.txt
+          else
+            echo "❌ No compilation errors with 'error:' pattern found"
+          fi
           
           echo ""
-          echo "=== Last 100 lines of build output ==="
-          tail -n 100 build_output.log
+          echo "🔗 === LINKER ERRORS ==="
+          if grep -E "(ld: |Undefined symbol|duplicate symbol|symbol not found)" build_output.log > /tmp/linker_errors.txt 2>/dev/null; then
+            echo "Found $(wc -l < /tmp/linker_errors.txt) linker error lines:"
+            head -n 50 /tmp/linker_errors.txt
+          else
+            echo "No linker errors found"
+          fi
           
           echo ""
-          echo "Full build log saved to build_output.log artifact"
+          echo "📦 === MODULE/FRAMEWORK ERRORS ==="
+          if grep -iE "(No such module|framework not found|could not build module|module.*not found)" build_output.log > /tmp/module_errors.txt 2>/dev/null; then
+            echo "Found $(wc -l < /tmp/module_errors.txt) module error lines:"
+            head -n 50 /tmp/module_errors.txt
+          else
+            echo "No module/framework errors found"
+          fi
+          
+          echo ""
+          echo "⚠️  === WARNINGS ==="
+          grep -iE "warning:" build_output.log | head -n 20 || echo "No warnings found"
+          
+          echo ""
+          echo "💥 === FAILED COMMANDS ==="
+          if grep -B 5 -E "(\*\* BUILD FAILED \*\*|Command.*failed|The following build commands failed)" build_output.log > /tmp/failed_commands.txt 2>/dev/null; then
+            echo "Found failed commands:"
+            head -n 100 /tmp/failed_commands.txt
+          else
+            echo "No failed command patterns found"
+          fi
+          
+          echo ""
+          echo "📝 === ERROR CONTEXT (10 lines before and after each error) ==="
+          grep -B 10 -A 10 "error:" build_output.log | head -n 300 || echo "No detailed error context found"
+          
+          echo ""
+          echo "🔎 === SEARCHING FOR SPECIFIC ERROR PATTERNS ==="
+          echo "Checking for common issues..."
+          grep -iE "(PrecompileModule|clang.*failed|swift.*failed|exit code 1)" build_output.log | head -n 30 || echo "No common error patterns found"
+          
+          echo ""
+          echo "📄 === LAST 200 LINES OF BUILD OUTPUT ==="
+          tail -n 200 build_output.log
+          
+          echo ""
+          echo "📂 === CHECKING FOR FASTLANE LOGS ==="
+          if [ -d "fastlane/logs" ]; then
+            echo "Fastlane logs directory exists:"
+            ls -lh fastlane/logs/
+            echo ""
+            
+            # Find the most recent log file
+            LATEST_LOG=$(find fastlane/logs -type f -name "*.log" -print0 | xargs -0 ls -t | head -n 1)
+            if [ -n "$LATEST_LOG" ]; then
+              echo "=== Latest Fastlane log: $LATEST_LOG ==="
+              echo "File size: $(wc -l < "$LATEST_LOG") lines"
+              echo ""
+              echo "Errors from Fastlane log:"
+              grep -B 10 -A 10 "error:" "$LATEST_LOG" | head -n 300 || echo "No errors in fastlane log"
+              echo ""
+              echo "Last 100 lines of Fastlane log:"
+              tail -n 100 "$LATEST_LOG"
+            fi
+          else
+            echo "❌ Fastlane logs directory not found"
+          fi
+          
+          echo ""
+          echo "🔍 === CHECKING XCODE BUILD LOGS ==="
+          if [ -d "$HOME/Library/Logs/gym" ]; then
+            echo "Gym logs found:"
+            ls -lht "$HOME/Library/Logs/gym" | head -n 10
+            LATEST_GYM_LOG=$(find "$HOME/Library/Logs/gym" -type f -name "*.log" -print0 | xargs -0 ls -t | head -n 1)
+            if [ -n "$LATEST_GYM_LOG" ]; then
+              echo ""
+              echo "Latest gym log: $LATEST_GYM_LOG"
+              echo "Last 100 lines:"
+              tail -n 100 "$LATEST_GYM_LOG"
+            fi
+          fi
+          
+          echo ""
+          echo "📊 === BUILD FAILURE SUMMARY ==="
+          echo "Total 'error:' occurrences: $(grep -c "error:" build_output.log || echo 0)"
+          echo "Total 'warning:' occurrences: $(grep -c "warning:" build_output.log || echo 0)"
+          echo "Total 'failed' occurrences: $(grep -ic "failed" build_output.log || echo 0)"
+          echo ""
+          echo "============================================="
+          echo "Full build logs saved to artifacts for download"
+          echo "Download 'ios-full-build-output' and 'ios-build-logs' artifacts"
+          echo "============================================="
           
           exit 1
 
@@ -283,6 +480,7 @@ jobs:
         with:
           name: ios-build-logs
           path: |
+            build_output.log
             fastlane/logs/**/*.log
             ~/Library/Logs/gym/**/*.log
           retention-days: 7
