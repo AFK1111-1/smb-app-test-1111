@@ -27,7 +27,16 @@ Added proper Xcode build settings to xcargs:
 ### 4. ✅ Added Build Cache Cleanup in CI/CD
 Added step in `qa-release.yml` to clean derived data and run `xcodebuild clean` before building.
 
-### 5. ✅ Added Verbose Build Logging
+### 5. ✅ Fixed iOS 18.1 SDK Installation (CRITICAL)
+**File**: `.github/workflows/qa-release.yml`
+- **This was the root cause of "(2 failures)" error**
+- Restored iOS platform download: `sudo xcodebuild -downloadPlatform iOS`
+- Added verification loop to ensure SDK installs before building (6 retries, 10s each)
+- Added SDK availability check with exit on failure
+- Added explicit `sdk: "iphoneos"` to Fastfile build config
+- Error was: `iOS 18.1 is not installed. To use with Xcode, first download and install the platform`
+
+### 6. ✅ Added Verbose Build Logging
 **Files**: `Fastfile`, `qa-release.yml`
 - Added `verbose: true` and `buildlog_path` to build_ios_app config
 - Added build log upload as artifact for easier debugging

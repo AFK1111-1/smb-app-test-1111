@@ -124,18 +124,63 @@ jobs:
         with:
           xcode-version: '16.1'
 
-      - name: Setup Xcode First Launch
+      - name: Setup Xcode First Launch and Install iOS 18.1 Runtime
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcodebuild -license accept || echo "License already accepted"
           
-      - name: Verify Xcode and iOS SDK
+          echo "=== Checking current iOS runtimes ==="
+          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
+          
+          echo ""
+          echo "=== Starting iOS 18.1 platform download ==="
+          sudo xcodebuild -downloadPlatform iOS &
+          DOWNLOAD_PID=$!
+          
+          echo "Waiting for iOS platform download (PID: $DOWNLOAD_PID)..."
+          wait $DOWNLOAD_PID || echo "Download process finished with exit code: $?"
+          
+          echo ""
+          echo "Waiting for installation to complete..."
+          for i in {1..6}; do
+            echo "Checking attempt $i/6..."
+            sleep 10
+            if xcodebuild -showsdks | grep -q "iOS 18"; then
+              echo "✅ iOS 18.x SDK found!"
+              break
+            fi
+            echo "Still waiting for SDK installation..."
+          done
+          
+          echo ""
+          echo "=== Verifying iOS runtimes after download ==="
+          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
+          
+          echo ""
+          echo "=== Available SDKs ==="
+          xcodebuild -showsdks
+          
+          echo ""
+          echo "=== Checking for iOS SDK ==="
+          if xcodebuild -showsdks | grep -q "iphoneos"; then
+            echo "✅ iOS SDK is available"
+          else
+            echo "❌ WARNING: iOS SDK not found"
+            exit 1
+          fi
+          
+      - name: Verify iOS SDK Installation
         run: |
           xcodebuild -version
-          xcodebuild -showsdks
+          echo ""
+          echo "=== iOS SDK Path ==="
           xcrun --sdk iphoneos --show-sdk-path
-          echo "Available iOS SDKs:"
-          xcodebuild -showsdks | grep -i ios
+          echo ""
+          echo "=== iOS SDK Version ==="
+          xcrun --sdk iphoneos --show-sdk-version
+          echo ""
+          echo "Build destination verification:"
+          xcodebuild -workspace ios/smbmobile.xcworkspace -scheme smbmobile -showdestinations || echo "Warning: Could not list destinations"
 
       - name: Create temporary keychain
         run: |
