@@ -100,12 +100,12 @@ platform :ios do
   desc "Build iOS simulator app for development"
   lane :dev_build do
     build_ios_app(
-      workspace: "ios/smbmobile.xcworkspace",
+      workspace: "../ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       sdk: "iphonesimulator",
       configuration: "Debug",
-      derived_data_path: "ios/build",
-      output_directory: "ios/build",
+      derived_data_path: "../ios/build",
+      output_directory: "../ios/build",
       output_name: "smbmobile.app"
     )
   end
@@ -173,15 +173,15 @@ platform :ios do
     UI.message "   - Identity: iPhone Distribution"
     
     begin
-      update_code_signing_settings(
-        use_automatic_signing: false,
-        path: "ios/smbmobile.xcodeproj",
-        team_id: "96W7U4JYV4",
-        profile_name: "match AppStore com.insighture.smbmobile",
-        code_sign_identity: "iPhone Distribution",
-        targets: ["smbmobile"],
-        build_configurations: ["Release"]
-      )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "../ios/smbmobile.xcodeproj",
+      team_id: "96W7U4JYV4",
+      profile_name: "match AppStore com.insighture.smbmobile",
+      code_sign_identity: "iPhone Distribution",
+      targets: ["smbmobile"],
+      build_configurations: ["Release"]
+    )
       UI.success "✅ Code signing settings updated"
     rescue => ex
       UI.error "❌ Failed to update code signing settings"
@@ -193,16 +193,16 @@ platform :ios do
     UI.message "📋 Step 4/8: Incrementing version number"
     
     # Get current version first
-    current_version = get_version_number(xcodeproj: "ios/smbmobile.xcodeproj")
+    current_version = get_version_number(xcodeproj: "../ios/smbmobile.xcodeproj")
     UI.message "   - Current version: #{current_version}"
     
     # Increment version number
     increment_version_number(
-      xcodeproj: "ios/smbmobile.xcodeproj",
+      xcodeproj: "../ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
     
-    new_version = get_version_number(xcodeproj: "ios/smbmobile.xcodeproj")
+    new_version = get_version_number(xcodeproj: "../ios/smbmobile.xcodeproj")
     UI.success "✅ Version incremented: #{current_version} → #{new_version}"
     
     UI.message ""
@@ -220,28 +220,28 @@ platform :ios do
       UI.message "   - Setting new build number: #{new_build}"
       
       increment_build_number(
-        xcodeproj: "ios/smbmobile.xcodeproj",
+        xcodeproj: "../ios/smbmobile.xcodeproj",
         build_number: new_build
       )
       UI.success "✅ Build number set to: #{new_build}"
     rescue => ex
       UI.warning "⚠️  Could not fetch latest TestFlight build: #{ex.message}"
       UI.message "   - Incrementing from current build number..."
-      current_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
+      current_build = get_build_number(xcodeproj: "../ios/smbmobile.xcodeproj")
       UI.message "   - Current build: #{current_build}"
-      increment_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
-      new_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
+      increment_build_number(xcodeproj: "../ios/smbmobile.xcodeproj")
+      new_build = get_build_number(xcodeproj: "../ios/smbmobile.xcodeproj")
       UI.success "✅ Build number incremented to: #{new_build}"
     end
 
     UI.message ""
     UI.message "📋 Step 6/8: Building iOS app"
     UI.important "⚙️  Build Configuration:"
-    UI.message "   - Workspace: ios/smbmobile.xcworkspace"
+    UI.message "   - Workspace: ../ios/smbmobile.xcworkspace"
     UI.message "   - Scheme: smbmobile"
     UI.message "   - Configuration: Release"
     UI.message "   - Export method: app-store"
-    UI.message "   - Output: ./ios/build/smbmobile.ipa"
+    UI.message "   - Output: ../ios/build/smbmobile.ipa"
     UI.message "   - SDK: iphoneos"
     UI.message "   - Destination: generic/platform=iOS"
     UI.message "   - Team ID: 96W7U4JYV4"
@@ -250,28 +250,23 @@ platform :ios do
     # Debug: Show current directory and file structure
     UI.message "🔍 Debug: Checking file system..."
     UI.message "   - Current directory: #{Dir.pwd}"
-    UI.message "   - Fastlane directory: #{__dir__}"
+    UI.message "   - Parent directory: #{File.expand_path('..')}"
     
-    # List what's in the current directory
-    UI.message "   - Files in current directory:"
-    Dir.entries('.').select { |f| !f.start_with?('.') }.each do |f|
-      UI.message "     - #{f}#{File.directory?(f) ? '/' : ''}"
-    end
-    
-    # Check if ios directory exists
-    if Dir.exist?('ios')
-      UI.message "   - Files in ios/ directory:"
-      Dir.entries('ios').select { |f| !f.start_with?('.') }.first(20).each do |f|
-        UI.message "     - #{f}#{File.directory?("ios/#{f}") ? '/' : ''}"
+    # Check if ios directory exists in parent
+    if Dir.exist?('../ios')
+      UI.success "   - ✅ ../ios/ directory exists"
+      UI.message "   - Files in ../ios/ directory:"
+      Dir.entries('../ios').select { |f| !f.start_with?('.') }.first(20).each do |f|
+        UI.message "     - #{f}#{File.directory?("../ios/#{f}") ? '/' : ''}"
       end
     else
-      UI.error "   - ❌ ios/ directory does not exist in current directory!"
+      UI.error "   - ❌ ../ios/ directory does not exist!"
     end
     
     UI.message ""
     
     # Verify workspace exists
-    workspace_path = "ios/smbmobile.xcworkspace"
+    workspace_path = "../ios/smbmobile.xcworkspace"
     absolute_workspace_path = File.expand_path(workspace_path)
     
     UI.message "   - Looking for workspace at: #{workspace_path}"
@@ -288,8 +283,8 @@ platform :ios do
       UI.error "2. Check if pod install completed successfully"
       UI.error "3. Verify the workspace was created in the correct location"
       UI.error ""
-      UI.error "Current directory structure:"
-      system("ls -la ios/ 2>/dev/null || echo 'Cannot list ios/ directory'")
+      UI.error "Parent directory structure:"
+      system("ls -la ../ios/ 2>/dev/null || echo 'Cannot list ../ios/ directory'")
       UI.user_error! "❌ Workspace not found at: #{workspace_path}"
     end
     
@@ -300,11 +295,11 @@ platform :ios do
     
     # Build configuration
     build_config = {
-      workspace: "ios/smbmobile.xcworkspace",
+      workspace: "../ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       configuration: "Release",
       export_method: "app-store",
-      output_directory: "./ios/build",
+      output_directory: "../ios/build",
       output_name: "smbmobile.ipa",
       destination: "generic/platform=iOS",
       sdk: "iphoneos",
@@ -317,7 +312,7 @@ platform :ios do
       },
       xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO -allowProvisioningUpdates",
       skip_profile_detection: true,
-      buildlog_path: "./fastlane/logs",
+      buildlog_path: "../fastlane/logs",
       verbose: true
     }
     
@@ -334,7 +329,7 @@ platform :ios do
       UI.success "✅ Build completed successfully!"
       
       # Verify IPA was created
-      ipa_path = "./ios/build/smbmobile.ipa"
+      ipa_path = "../ios/build/smbmobile.ipa"
       if File.exist?(ipa_path)
         ipa_size = File.size(ipa_path) / 1024.0 / 1024.0
         UI.success "✅ IPA created: #{ipa_path} (#{ipa_size.round(2)} MB)"
@@ -384,12 +379,12 @@ platform :ios do
           
           if retry_count < max_retries
             UI.message "   - Incrementing build number and retrying..."
-            current_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
+            current_build = get_build_number(xcodeproj: "../ios/smbmobile.xcodeproj")
             new_build = current_build.to_i + 1
             UI.message "   - New build number: #{new_build}"
             
             increment_build_number(
-              xcodeproj: "ios/smbmobile.xcodeproj",
+              xcodeproj: "../ios/smbmobile.xcodeproj",
               build_number: new_build
             )
             
@@ -415,24 +410,24 @@ platform :ios do
     UI.success "🎉 ============================================="
     UI.success "🎉 iOS QA Release Completed Successfully!"
     UI.success "🎉 ============================================="
-    UI.success "   Version: #{get_version_number(xcodeproj: 'ios/smbmobile.xcodeproj')}"
-    UI.success "   Build: #{get_build_number(xcodeproj: 'ios/smbmobile.xcodeproj')}"
-    UI.success "   IPA: ./ios/build/smbmobile.ipa"
+    UI.success "   Version: #{get_version_number(xcodeproj: '../ios/smbmobile.xcodeproj')}"
+    UI.success "   Build: #{get_build_number(xcodeproj: '../ios/smbmobile.xcodeproj')}"
+    UI.success "   IPA: ../ios/build/smbmobile.ipa"
     UI.success "============================================="
   end
 
   desc "Submit a new staging build to TestFlight"
   lane :stg_release do
     increment_version_number(
-      xcodeproj: "ios/smbmobile.xcodeproj",
+      xcodeproj: "../ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
     increment_build_number(
-      xcodeproj: "ios/smbmobile.xcodeproj"
+      xcodeproj: "../ios/smbmobile.xcodeproj"
     )
 
     build_ios_app(
-      workspace: "ios/smbmobile.xcworkspace",
+      workspace: "../ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       export_method: "app-store",
       export_options: {
@@ -441,7 +436,7 @@ platform :ios do
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         }
       },
-      output_directory: "ios/build",
+      output_directory: "../ios/build",
       output_name: "smbmobile.ipa",
       team_id: ENV['APPLE_TEAM_ID'] || "96W7U4JYV4"
     )
@@ -456,15 +451,15 @@ platform :ios do
   desc "Submit a new production build to App Store"
   lane :production_release do
     increment_version_number(
-      xcodeproj: "ios/smbmobile.xcodeproj",
+      xcodeproj: "../ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
     increment_build_number(
-      xcodeproj: "ios/smbmobile.xcodeproj"
+      xcodeproj: "../ios/smbmobile.xcodeproj"
     )
 
     build_ios_app(
-      workspace: "ios/smbmobile.xcworkspace",
+      workspace: "../ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       export_method: "app-store",
       export_options: {
@@ -473,7 +468,7 @@ platform :ios do
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         }
       },
-      output_directory: "ios/build",
+      output_directory: "../ios/build",
       output_name: "smbmobile.ipa",
       team_id: ENV['APPLE_TEAM_ID'] || "96W7U4JYV4"
     )
@@ -490,15 +485,15 @@ platform :ios do
   desc "Submit a new production build to App Store (legacy)"
   lane :release do
     increment_version_number(
-      xcodeproj: "ios/smbmobile.xcodeproj",
+      xcodeproj: "../ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
     increment_build_number(
-      xcodeproj: "ios/smbmobile.xcodeproj"
+      xcodeproj: "../ios/smbmobile.xcodeproj"
     )
 
     build_ios_app(
-      workspace: "ios/smbmobile.xcworkspace",
+      workspace: "../ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       export_method: "app-store",
       export_options: {
@@ -507,7 +502,7 @@ platform :ios do
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         }
       },
-      output_directory: "ios/build",
+      output_directory: "../ios/build",
       output_name: "smbmobile.ipa",
       team_id: ENV['APPLE_TEAM_ID'] || "96W7U4JYV4"
     )
