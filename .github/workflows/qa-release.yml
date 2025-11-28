@@ -184,57 +184,30 @@ jobs:
       - name: Fix Xcode 16.1 Firebase Compatibility
         working-directory: ios
         run: |
-          echo "🔧 Installing xcodeproj gem for Xcode project modification..."
-          gem install xcodeproj
+          echo "🔧 Fixing Xcode 16.1 non-modular header errors..."
           echo ""
           
-          echo "📝 Modifying Pods project to fix Firebase non-modular header errors..."
-          ruby << 'RUBY'
-          require 'xcodeproj'
+          echo "📝 Step 1: Modifying ALL xcconfig files in Pods..."
+          find Pods/Target\ Support\ Files -name "*.xcconfig" -type f | while read xcconfig_file; do
+            echo "Patching: $xcconfig_file"
+            # Append our fixes to every xcconfig file
+            cat >> "$xcconfig_file" << 'EOF'
+
+// Xcode 16.1 Compatibility Fixes
+CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES = NO
+GCC_TREAT_WARNINGS_AS_ERRORS = NO
+EOF
+          done
           
-          # Open the PODS project (not the main app project!)
-          pods_project_path = 'Pods/Pods.xcodeproj'
-          puts "Opening Pods project: #{pods_project_path}"
+          echo ""
+          echo "✅ Modified all xcconfig files"
+          echo ""
           
-          unless File.exist?(pods_project_path)
-            puts "❌ ERROR: Pods project not found at #{pods_project_path}"
-            exit 1
-          end
-          
-          project = Xcodeproj::Project.open(pods_project_path)
-          
-          puts "Found #{project.targets.length} targets in Pods project"
-          puts ""
-          
-          # Fix ALL Pod targets
-          fixed_targets = []
-          firebase_targets = []
-          
-          project.targets.each do |target|
-            target.build_configurations.each do |config|
-              # Disable non-modular header warning for ALL pod targets
-              config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
-              
-              # For Firebase/RNFB targets, also disable warnings as errors
-              if target.name.include?('RNFB') || target.name.include?('Firebase')
-                config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-                config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
-                firebase_targets << target.name unless firebase_targets.include?(target.name)
-              end
-            end
-            
-            fixed_targets << target.name
-          end
-          
-          project.save
-          
-          puts "✅ Modified #{fixed_targets.length} pod targets"
-          puts ""
-          puts "Firebase/RNFB targets fixed (#{firebase_targets.length}):"
-          firebase_targets.each { |name| puts "   - #{name}" }
-          puts ""
-          puts "✅ Pods project settings updated successfully!"
-          RUBY
+          echo "📝 Step 2: Verifying xcconfig for RNFBApp..."
+          if [ -f "Pods/Target Support Files/RNFBApp/RNFBApp.release.xcconfig" ]; then
+            echo "RNFBApp Release xcconfig contents (last 10 lines):"
+            tail -10 "Pods/Target Support Files/RNFBApp/RNFBApp.release.xcconfig"
+          fi
           
           echo ""
           echo "✅ Firebase compatibility fix applied!"
