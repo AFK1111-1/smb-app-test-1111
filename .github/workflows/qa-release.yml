@@ -193,10 +193,10 @@ jobs:
             # Append our fixes to every xcconfig file
             cat >> "$xcconfig_file" << 'EOF'
 
-// Xcode 16.1 Compatibility Fixes
-CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES = NO
-GCC_TREAT_WARNINGS_AS_ERRORS = NO
-EOF
+          // Xcode 16.1 Compatibility Fixes
+          CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES = NO
+          GCC_TREAT_WARNINGS_AS_ERRORS = NO
+          EOF
           done
           
           echo ""
