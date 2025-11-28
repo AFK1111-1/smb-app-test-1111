@@ -167,21 +167,26 @@ platform :ios do
     
     UI.message ""
     UI.message "📋 Step 3/8: Updating code signing settings"
-    UI.message "   - Project: ios/smbmobile.xcodeproj"
+    
+    # update_code_signing_settings requires path relative to fastlane execution (project root)
+    # Fastlane changes to project root for this action
+    project_path = "ios/smbmobile.xcodeproj"
+    
+    UI.message "   - Project: #{project_path}"
     UI.message "   - Team ID: 96W7U4JYV4"
     UI.message "   - Profile: match AppStore com.insighture.smbmobile"
     UI.message "   - Identity: iPhone Distribution"
     
     begin
-    update_code_signing_settings(
-      use_automatic_signing: false,
-      path: "../ios/smbmobile.xcodeproj",
-      team_id: "96W7U4JYV4",
-      profile_name: "match AppStore com.insighture.smbmobile",
-      code_sign_identity: "iPhone Distribution",
-      targets: ["smbmobile"],
-      build_configurations: ["Release"]
-    )
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path: project_path,
+        team_id: "96W7U4JYV4",
+        profile_name: "match AppStore com.insighture.smbmobile",
+        code_sign_identity: "iPhone Distribution",
+        targets: ["smbmobile"],
+        build_configurations: ["Release"]
+      )
       UI.success "✅ Code signing settings updated"
     rescue => ex
       UI.error "❌ Failed to update code signing settings"
@@ -192,21 +197,27 @@ platform :ios do
     UI.message ""
     UI.message "📋 Step 4/8: Incrementing version number"
     
+    # Version actions also run from project root context
+    project_path = "ios/smbmobile.xcodeproj"
+    
     # Get current version first
-    current_version = get_version_number(xcodeproj: "../ios/smbmobile.xcodeproj")
+    current_version = get_version_number(xcodeproj: project_path)
     UI.message "   - Current version: #{current_version}"
     
     # Increment version number
     increment_version_number(
-      xcodeproj: "../ios/smbmobile.xcodeproj",
+      xcodeproj: project_path,
       bump_type: "patch"
     )
     
-    new_version = get_version_number(xcodeproj: "../ios/smbmobile.xcodeproj")
+    new_version = get_version_number(xcodeproj: project_path)
     UI.success "✅ Version incremented: #{current_version} → #{new_version}"
     
     UI.message ""
     UI.message "📋 Step 5/8: Incrementing build number"
+    
+    # Build number actions also run from project root context
+    project_path = "ios/smbmobile.xcodeproj"
     
     # Get latest TestFlight build and increment
     begin
@@ -220,17 +231,17 @@ platform :ios do
       UI.message "   - Setting new build number: #{new_build}"
       
       increment_build_number(
-        xcodeproj: "../ios/smbmobile.xcodeproj",
+        xcodeproj: project_path,
         build_number: new_build
       )
       UI.success "✅ Build number set to: #{new_build}"
     rescue => ex
       UI.warning "⚠️  Could not fetch latest TestFlight build: #{ex.message}"
       UI.message "   - Incrementing from current build number..."
-      current_build = get_build_number(xcodeproj: "../ios/smbmobile.xcodeproj")
+      current_build = get_build_number(xcodeproj: project_path)
       UI.message "   - Current build: #{current_build}"
-      increment_build_number(xcodeproj: "../ios/smbmobile.xcodeproj")
-      new_build = get_build_number(xcodeproj: "../ios/smbmobile.xcodeproj")
+      increment_build_number(xcodeproj: project_path)
+      new_build = get_build_number(xcodeproj: project_path)
       UI.success "✅ Build number incremented to: #{new_build}"
     end
 
@@ -379,12 +390,13 @@ platform :ios do
           
           if retry_count < max_retries
             UI.message "   - Incrementing build number and retrying..."
-            current_build = get_build_number(xcodeproj: "../ios/smbmobile.xcodeproj")
+            project_path = "ios/smbmobile.xcodeproj"
+            current_build = get_build_number(xcodeproj: project_path)
             new_build = current_build.to_i + 1
             UI.message "   - New build number: #{new_build}"
             
             increment_build_number(
-              xcodeproj: "../ios/smbmobile.xcodeproj",
+              xcodeproj: project_path,
               build_number: new_build
             )
             
@@ -410,8 +422,9 @@ platform :ios do
     UI.success "🎉 ============================================="
     UI.success "🎉 iOS QA Release Completed Successfully!"
     UI.success "🎉 ============================================="
-    UI.success "   Version: #{get_version_number(xcodeproj: '../ios/smbmobile.xcodeproj')}"
-    UI.success "   Build: #{get_build_number(xcodeproj: '../ios/smbmobile.xcodeproj')}"
+    project_path = "ios/smbmobile.xcodeproj"
+    UI.success "   Version: #{get_version_number(xcodeproj: project_path)}"
+    UI.success "   Build: #{get_build_number(xcodeproj: project_path)}"
     UI.success "   IPA: ../ios/build/smbmobile.ipa"
     UI.success "============================================="
   end
@@ -419,11 +432,11 @@ platform :ios do
   desc "Submit a new staging build to TestFlight"
   lane :stg_release do
     increment_version_number(
-      xcodeproj: "../ios/smbmobile.xcodeproj",
+      xcodeproj: "ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
     increment_build_number(
-      xcodeproj: "../ios/smbmobile.xcodeproj"
+      xcodeproj: "ios/smbmobile.xcodeproj"
     )
 
     build_ios_app(
@@ -451,11 +464,11 @@ platform :ios do
   desc "Submit a new production build to App Store"
   lane :production_release do
     increment_version_number(
-      xcodeproj: "../ios/smbmobile.xcodeproj",
+      xcodeproj: "ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
     increment_build_number(
-      xcodeproj: "../ios/smbmobile.xcodeproj"
+      xcodeproj: "ios/smbmobile.xcodeproj"
     )
 
     build_ios_app(
@@ -485,11 +498,11 @@ platform :ios do
   desc "Submit a new production build to App Store (legacy)"
   lane :release do
     increment_version_number(
-      xcodeproj: "../ios/smbmobile.xcodeproj",
+      xcodeproj: "ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
     increment_build_number(
-      xcodeproj: "../ios/smbmobile.xcodeproj"
+      xcodeproj: "ios/smbmobile.xcodeproj"
     )
 
     build_ios_app(
