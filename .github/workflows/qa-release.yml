@@ -173,12 +173,24 @@ jobs:
           KEYCHAIN_NAME: ${{ env.KEYCHAIN_NAME }}
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 60
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 6
+          FASTLANE_HIDE_GITHUB_ISSUES: 1
+          FASTLANE_SKIP_UPDATE_CHECK: 1
 
       - name: Cleanup keychain
         if: always()
         run: |
           security delete-keychain "${{ env.KEYCHAIN_NAME }}" 2>/dev/null || true
 
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: |
+            fastlane/logs/**/*.log
+            ~/Library/Logs/gym/**/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload iOS Release IPA
         uses: actions/upload-artifact@v4

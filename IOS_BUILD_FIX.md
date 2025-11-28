@@ -1,7 +1,7 @@
 # iOS Build Failure Fix for Xcode 16.1
 
 ## Problem
-PrecompileModule failure for RNFBApp and other modules when building with Xcode 16.1, plus iOS deployment target warnings.
+PrecompileModule failure for RNFBApp and other modules when building with Xcode 16.1, plus iOS deployment target warnings. Also compatibility issues with React Native New Architecture.
 
 ## Solutions Applied ✅
 
@@ -24,6 +24,18 @@ Added proper Xcode build settings to xcargs:
 
 ### 4. ✅ Added Build Cache Cleanup in CI/CD
 Added step in `qa-release.yml` to clean derived data and run `xcodebuild clean` before building.
+
+### 5. ✅ Disabled React Native New Architecture
+**File**: `app.config.ts`
+- Set `newArchEnabled: false` (temporarily) for Xcode 16.1 compatibility
+- Added `RCT_NEW_ARCH_ENABLED=0` to Fastfile xcargs
+- New Architecture has known issues with Xcode 16.1 and Firebase pods
+
+### 6. ✅ Added Verbose Build Logging
+**Files**: `Fastfile`, `qa-release.yml`
+- Added `verbose: true` and `buildlog_path` to build_ios_app config
+- Added build log upload as artifact for easier debugging
+- Logs available in GitHub Actions artifacts for 7 days
 
 ---
 
