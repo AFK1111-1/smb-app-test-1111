@@ -100,12 +100,12 @@ platform :ios do
   desc "Build iOS simulator app for development"
   lane :dev_build do
     build_ios_app(
-      workspace: "../ios/smbmobile.xcworkspace",
+      workspace: "ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       sdk: "iphonesimulator",
       configuration: "Debug",
-      derived_data_path: "../ios/build",
-      output_directory: "../ios/build",
+      derived_data_path: "ios/build",
+      output_directory: "ios/build",
       output_name: "smbmobile.app"
     )
   end
@@ -248,11 +248,11 @@ platform :ios do
     UI.message ""
     UI.message "📋 Step 6/8: Building iOS app"
     UI.important "⚙️  Build Configuration:"
-    UI.message "   - Workspace: ../ios/smbmobile.xcworkspace"
+    UI.message "   - Workspace: ios/smbmobile.xcworkspace"
     UI.message "   - Scheme: smbmobile"
     UI.message "   - Configuration: Release"
     UI.message "   - Export method: app-store"
-    UI.message "   - Output: ../ios/build/smbmobile.ipa"
+    UI.message "   - Output: ios/build/smbmobile.ipa"
     UI.message "   - SDK: iphoneos"
     UI.message "   - Destination: generic/platform=iOS"
     UI.message "   - Team ID: 96W7U4JYV4"
@@ -261,23 +261,22 @@ platform :ios do
     # Debug: Show current directory and file structure
     UI.message "🔍 Debug: Checking file system..."
     UI.message "   - Current directory: #{Dir.pwd}"
-    UI.message "   - Parent directory: #{File.expand_path('..')}"
     
-    # Check if ios directory exists in parent
-    if Dir.exist?('../ios')
-      UI.success "   - ✅ ../ios/ directory exists"
-      UI.message "   - Files in ../ios/ directory:"
-      Dir.entries('../ios').select { |f| !f.start_with?('.') }.first(20).each do |f|
-        UI.message "     - #{f}#{File.directory?("../ios/#{f}") ? '/' : ''}"
+    # Check if ios directory exists (relative to project root where build_ios_app runs)
+    if Dir.exist?('ios')
+      UI.success "   - ✅ ios/ directory exists"
+      UI.message "   - Files in ios/ directory:"
+      Dir.entries('ios').select { |f| !f.start_with?('.') }.first(20).each do |f|
+        UI.message "     - #{f}#{File.directory?("ios/#{f}") ? '/' : ''}"
       end
     else
-      UI.error "   - ❌ ../ios/ directory does not exist!"
+      UI.error "   - ❌ ios/ directory does not exist!"
     end
     
     UI.message ""
     
-    # Verify workspace exists
-    workspace_path = "../ios/smbmobile.xcworkspace"
+    # Verify workspace exists (relative to project root)
+    workspace_path = "ios/smbmobile.xcworkspace"
     absolute_workspace_path = File.expand_path(workspace_path)
     
     UI.message "   - Looking for workspace at: #{workspace_path}"
@@ -294,8 +293,8 @@ platform :ios do
       UI.error "2. Check if pod install completed successfully"
       UI.error "3. Verify the workspace was created in the correct location"
       UI.error ""
-      UI.error "Parent directory structure:"
-      system("ls -la ../ios/ 2>/dev/null || echo 'Cannot list ../ios/ directory'")
+      UI.error "iOS directory structure:"
+      system("ls -la ios/ 2>/dev/null || echo 'Cannot list ios/ directory'")
       UI.user_error! "❌ Workspace not found at: #{workspace_path}"
     end
     
@@ -305,12 +304,13 @@ platform :ios do
     UI.message "Available schemes:\n#{schemes}"
     
     # Build configuration
+    # build_ios_app also changes to project root, so use ios/ paths
     build_config = {
-      workspace: "../ios/smbmobile.xcworkspace",
+      workspace: "ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       configuration: "Release",
       export_method: "app-store",
-      output_directory: "../ios/build",
+      output_directory: "ios/build",
       output_name: "smbmobile.ipa",
       destination: "generic/platform=iOS",
       sdk: "iphoneos",
@@ -323,7 +323,7 @@ platform :ios do
       },
       xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO -allowProvisioningUpdates",
       skip_profile_detection: true,
-      buildlog_path: "../fastlane/logs",
+      buildlog_path: "fastlane/logs",
       verbose: true
     }
     
@@ -339,13 +339,13 @@ platform :ios do
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       UI.success "✅ Build completed successfully!"
       
-      # Verify IPA was created
-      ipa_path = "../ios/build/smbmobile.ipa"
+      # Verify IPA was created (relative to project root)
+      ipa_path = "ios/build/smbmobile.ipa"
       if File.exist?(ipa_path)
         ipa_size = File.size(ipa_path) / 1024.0 / 1024.0
         UI.success "✅ IPA created: #{ipa_path} (#{ipa_size.round(2)} MB)"
       else
-        UI.error "⚠️  IPA file not found at expected location"
+        UI.error "⚠️  IPA file not found at expected location: #{ipa_path}"
       end
     rescue => ex
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -425,7 +425,7 @@ platform :ios do
     project_path = "ios/smbmobile.xcodeproj"
     UI.success "   Version: #{get_version_number(xcodeproj: project_path)}"
     UI.success "   Build: #{get_build_number(xcodeproj: project_path)}"
-    UI.success "   IPA: ../ios/build/smbmobile.ipa"
+    UI.success "   IPA: ios/build/smbmobile.ipa"
     UI.success "============================================="
   end
 
@@ -440,7 +440,7 @@ platform :ios do
     )
 
     build_ios_app(
-      workspace: "../ios/smbmobile.xcworkspace",
+      workspace: "ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       export_method: "app-store",
       export_options: {
@@ -449,7 +449,7 @@ platform :ios do
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         }
       },
-      output_directory: "../ios/build",
+      output_directory: "ios/build",
       output_name: "smbmobile.ipa",
       team_id: ENV['APPLE_TEAM_ID'] || "96W7U4JYV4"
     )
@@ -472,7 +472,7 @@ platform :ios do
     )
 
     build_ios_app(
-      workspace: "../ios/smbmobile.xcworkspace",
+      workspace: "ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       export_method: "app-store",
       export_options: {
@@ -481,7 +481,7 @@ platform :ios do
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         }
       },
-      output_directory: "../ios/build",
+      output_directory: "ios/build",
       output_name: "smbmobile.ipa",
       team_id: ENV['APPLE_TEAM_ID'] || "96W7U4JYV4"
     )
@@ -506,7 +506,7 @@ platform :ios do
     )
 
     build_ios_app(
-      workspace: "../ios/smbmobile.xcworkspace",
+      workspace: "ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       export_method: "app-store",
       export_options: {
@@ -515,7 +515,7 @@ platform :ios do
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         }
       },
-      output_directory: "../ios/build",
+      output_directory: "ios/build",
       output_name: "smbmobile.ipa",
       team_id: ENV['APPLE_TEAM_ID'] || "96W7U4JYV4"
     )
