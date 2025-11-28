@@ -335,8 +335,7 @@ platform :ios do
       xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO SWIFT_OPTIMIZATION_LEVEL=Onone -allowProvisioningUpdates -UseModernBuildSystem=NO",
       skip_profile_detection: true,
       buildlog_path: "fastlane/logs",
-      verbose: true,
-      project: "ios/smbmobile.xcodeproj"
+      verbose: true
     }
     
     UI.message ""
