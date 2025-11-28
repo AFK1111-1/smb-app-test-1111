@@ -363,6 +363,8 @@ platform :ios do
       # Check if iOS directory exists, if not run expo prebuild
       unless Dir.exist?("ios")
         UI.message "🔄 iOS directory not found. Running 'expo prebuild'..."
+        # Ensure we're in the project root before running expo prebuild
+        Dir.chdir("..") unless File.exist?("package.json")
         sh("npx expo prebuild --clean --platform ios")
       end
       
