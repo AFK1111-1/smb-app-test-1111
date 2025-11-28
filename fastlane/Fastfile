@@ -261,32 +261,40 @@ platform :ios do
     # Debug: Show current directory and file structure
     UI.message "🔍 Debug: Checking file system..."
     UI.message "   - Current directory: #{Dir.pwd}"
+    UI.message "   - Project root: #{File.expand_path('..')}"
     
-    # Check if ios directory exists (relative to project root where build_ios_app runs)
-    if Dir.exist?('ios')
-      UI.success "   - ✅ ios/ directory exists"
-      UI.message "   - Files in ios/ directory:"
-      Dir.entries('ios').select { |f| !f.start_with?('.') }.first(20).each do |f|
-        UI.message "     - #{f}#{File.directory?("ios/#{f}") ? '/' : ''}"
+    # Our Ruby code runs from fastlane/ dir, so use ../ios/ for checks
+    # But Fastlane actions will use ios/ (they chdir to project root)
+    ruby_ios_path = "../ios"
+    fastlane_ios_path = "ios"
+    
+    # Check if ios directory exists (from our current fastlane/ directory)
+    if Dir.exist?(ruby_ios_path)
+      UI.success "   - ✅ #{ruby_ios_path}/ directory exists"
+      UI.message "   - Files in #{ruby_ios_path}/ directory:"
+      Dir.entries(ruby_ios_path).select { |f| !f.start_with?('.') }.first(20).each do |f|
+        UI.message "     - #{f}#{File.directory?("#{ruby_ios_path}/#{f}") ? '/' : ''}"
       end
     else
-      UI.error "   - ❌ ios/ directory does not exist!"
+      UI.error "   - ❌ #{ruby_ios_path}/ directory does not exist!"
     end
     
     UI.message ""
     
-    # Verify workspace exists (relative to project root)
-    workspace_path = "ios/smbmobile.xcworkspace"
-    absolute_workspace_path = File.expand_path(workspace_path)
+    # Verify workspace exists (from our current fastlane/ directory)
+    ruby_workspace_path = "#{ruby_ios_path}/smbmobile.xcworkspace"
+    fastlane_workspace_path = "#{fastlane_ios_path}/smbmobile.xcworkspace"
+    absolute_workspace_path = File.expand_path(ruby_workspace_path)
     
-    UI.message "   - Looking for workspace at: #{workspace_path}"
+    UI.message "   - Looking for workspace at: #{ruby_workspace_path} (for verification)"
+    UI.message "   - Fastlane will use: #{fastlane_workspace_path} (after chdir to project root)"
     UI.message "   - Absolute path: #{absolute_workspace_path}"
-    UI.message "   - Workspace exists: #{File.exist?(workspace_path)}"
+    UI.message "   - Workspace exists: #{File.exist?(ruby_workspace_path)}"
     
-    if File.exist?(workspace_path)
-      UI.success "✅ Workspace found: #{workspace_path}"
+    if File.exist?(ruby_workspace_path)
+      UI.success "✅ Workspace found: #{ruby_workspace_path}"
     else
-      UI.error "❌ Workspace not found at: #{workspace_path}"
+      UI.error "❌ Workspace not found at: #{ruby_workspace_path}"
       UI.error ""
       UI.error "Troubleshooting information:"
       UI.error "1. Check if Expo prebuild completed successfully"
@@ -294,8 +302,8 @@ platform :ios do
       UI.error "3. Verify the workspace was created in the correct location"
       UI.error ""
       UI.error "iOS directory structure:"
-      system("ls -la ios/ 2>/dev/null || echo 'Cannot list ios/ directory'")
-      UI.user_error! "❌ Workspace not found at: #{workspace_path}"
+      system("ls -la #{ruby_ios_path}/ 2>/dev/null || echo 'Cannot list #{ruby_ios_path}/ directory'")
+      UI.user_error! "❌ Workspace not found at: #{ruby_workspace_path}"
     end
     
     # Verify scheme exists
@@ -339,13 +347,19 @@ platform :ios do
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       UI.success "✅ Build completed successfully!"
       
-      # Verify IPA was created (relative to project root)
-      ipa_path = "ios/build/smbmobile.ipa"
+      # Verify IPA was created (from our fastlane/ directory)
+      ipa_path = "../ios/build/smbmobile.ipa"
       if File.exist?(ipa_path)
         ipa_size = File.size(ipa_path) / 1024.0 / 1024.0
         UI.success "✅ IPA created: #{ipa_path} (#{ipa_size.round(2)} MB)"
       else
         UI.error "⚠️  IPA file not found at expected location: #{ipa_path}"
+        UI.error "Checking alternate location..."
+        alt_path = "ios/build/smbmobile.ipa"
+        if File.exist?(alt_path)
+          ipa_size = File.size(alt_path) / 1024.0 / 1024.0
+          UI.success "✅ IPA found at: #{alt_path} (#{ipa_size.round(2)} MB)"
+        end
       end
     rescue => ex
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
