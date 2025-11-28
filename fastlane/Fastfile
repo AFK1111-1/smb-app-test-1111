@@ -327,9 +327,11 @@ platform :ios do
         provisioningProfiles: {
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         },
-        teamID: "96W7U4JYV4"
+        teamID: "96W7U4JYV4",
+        generateAppStoreInformation: true,
+        manageAppVersionAndBuildNumber: true
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO -allowProvisioningUpdates",
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO -allowProvisioningUpdates -UseModernBuildSystem=NO",
       skip_profile_detection: true,
       buildlog_path: "fastlane/logs",
       verbose: true

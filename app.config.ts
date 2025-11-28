@@ -47,6 +47,8 @@ export default {
       'expo-localization',
       '@react-native-firebase/app',
       '@react-native-firebase/messaging',
+      // Custom Firebase fix plugin
+      './plugins/withFirebaseFix',
       [
         'expo-splash-screen',
         {
