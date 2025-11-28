@@ -180,8 +180,52 @@ jobs:
           else
             echo "⚠️  WARNING: Project not found!"
           fi
+
+      - name: Fix Xcode 16.1 Firebase Compatibility
+        working-directory: ios
+        run: |
+          echo "🔧 Installing xcodeproj gem for Xcode project modification..."
+          gem install xcodeproj
+          echo ""
           
-          cd ..
+          echo "📝 Modifying Xcode project settings to fix Firebase non-modular header errors..."
+          ruby << 'RUBY'
+          require 'xcodeproj'
+          
+          project_path = 'smbmobile.xcodeproj'
+          puts "Opening project: #{project_path}"
+          project = Xcodeproj::Project.open(project_path)
+          
+          fixed_targets = []
+          project.targets.each do |target|
+            # Fix Firebase and React Native Firebase targets
+            if target.name.include?('RNFB') || target.name.include?('Firebase') || 
+               target.name == 'RNFBApp' || target.name == 'RNFBMessaging'
+              
+              target.build_configurations.each do |config|
+                # Disable non-modular header warning
+                config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
+                # Don't treat warnings as errors for these modules
+                config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+                # Disable strict prototypes warning
+                config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+              end
+              
+              fixed_targets << target.name
+            end
+          end
+          
+          project.save
+          
+          puts ""
+          puts "✅ Fixed #{fixed_targets.length} targets:"
+          fixed_targets.each { |name| puts "   - #{name}" }
+          puts ""
+          puts "✅ Xcode project settings updated successfully!"
+          RUBY
+          
+          echo ""
+          echo "✅ Firebase compatibility fix applied!"
 
       - name: Setup SSH for Fastlane Match
         run: |
