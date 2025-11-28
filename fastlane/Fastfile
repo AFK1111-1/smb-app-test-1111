@@ -331,7 +331,7 @@ platform :ios do
         generateAppStoreInformation: true,
         manageAppVersionAndBuildNumber: true
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO -allowProvisioningUpdates -UseModernBuildSystem=NO",
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO SWIFT_OPTIMIZATION_LEVEL=Onone -allowProvisioningUpdates -UseModernBuildSystem=NO",
       skip_profile_detection: true,
       buildlog_path: "fastlane/logs",
       verbose: true
@@ -343,25 +343,55 @@ platform :ios do
     UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     begin
-      # Build and archive
+      UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      UI.header "🛠  Starting build process"
+      
+      # Print environment information
+      UI.message "💻 Environment:"
+      UI.message "- Ruby: #{`ruby -v`.strip}"
+      UI.message "- Xcode: #{`xcodebuild -version`.strip}"
+      UI.message "- Node: #{`node -v`.strip}" rescue nil
+      UI.message "- npm: #{`npm -v`.strip}" rescue nil
+      UI.message "- CocoaPods: #{`pod --version`.strip}" rescue nil
+      
+      # Clean build folder before building
+      UI.message "🔄 Cleaning build folder..."
+      sh("rm -rf ~/Library/Developer/Xcode/DerivedData/*")
+      sh("cd ios && xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile")
+      
+      # Install pods with verbose output
+      UI.message "💎 Installing pods..."
+      sh("cd ios && pod install --repo-update --verbose")
+      
+      # Build the app with detailed logging
+      UI.message "🔨 Building application..."
       build_ios_app(build_config)
       
-      UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       UI.success "✅ Build completed successfully!"
       
       # Verify IPA was created (from our fastlane/ directory)
-      ipa_path = "../ios/build/smbmobile.ipa"
-      if File.exist?(ipa_path)
-        ipa_size = File.size(ipa_path) / 1024.0 / 1024.0
-        UI.success "✅ IPA created: #{ipa_path} (#{ipa_size.round(2)} MB)"
-      else
-        UI.error "⚠️  IPA file not found at expected location: #{ipa_path}"
-        UI.error "Checking alternate location..."
-        alt_path = "ios/build/smbmobile.ipa"
-        if File.exist?(alt_path)
-          ipa_size = File.size(alt_path) / 1024.0 / 1024.0
-          UI.success "✅ IPA found at: #{alt_path} (#{ipa_size.round(2)} MB)"
+      ipa_paths = [
+        "../ios/build/smbmobile.ipa",
+        "ios/build/smbmobile.ipa",
+        "build/smbmobile.ipa",
+        "smbmobile.ipa"
+      ]
+      
+      found_ipa = false
+      ipa_paths.each do |path|
+        if File.exist?(path)
+          ipa_size = File.size(path) / 1024.0 / 1024.0
+          UI.success "✅ IPA found at: #{File.expand_path(path)} (#{ipa_size.round(2)} MB)"
+          found_ipa = true
+          break
         end
+      end
+      
+      unless found_ipa
+        UI.error "❌ Failed to locate IPA file. Check build logs for errors."
+        UI.error "Searched in the following locations:"
+        ipa_paths.each { |p| UI.error "- #{File.expand_path(p)}" }
       end
     rescue => ex
       UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
