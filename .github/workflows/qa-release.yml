@@ -124,16 +124,18 @@ jobs:
         with:
           xcode-version: '16.1'
 
-      - name: Setup Xcode First Launch and Install iOS 18.1 Runtime
+      - name: Setup Xcode First Launch
         run: |
           sudo xcodebuild -runFirstLaunch
           sudo xcodebuild -license accept || echo "License already accepted"
-          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
-          sudo xcodebuild -downloadPlatform iOS &
-          DOWNLOAD_PID=$!
-          wait $DOWNLOAD_PID || echo "Download process finished"
-          sleep 30
-          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
+          
+      - name: Verify Xcode and iOS SDK
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun --sdk iphoneos --show-sdk-path
+          echo "Available iOS SDKs:"
+          xcodebuild -showsdks | grep -i ios
 
       - name: Create temporary keychain
         run: |
@@ -156,15 +158,37 @@ jobs:
         run: |
           security unlock-keychain -p "${{ env.KEYCHAIN_PASSWORD }}" "${{ env.KEYCHAIN_NAME }}"
 
+      - name: Verify Xcode Workspace
+        run: |
+          cd ios
+          ls -la
+          echo "Checking workspace..."
+          if [ -d "smbmobile.xcworkspace" ]; then
+            echo "✅ Workspace exists"
+            ls -la smbmobile.xcworkspace/
+          else
+            echo "❌ Workspace not found!"
+            exit 1
+          fi
+          
+          echo ""
+          echo "Available schemes:"
+          xcodebuild -workspace smbmobile.xcworkspace -list
+          cd ..
+
       - name: Clean Xcode build cache
         run: |
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
           cd ios
-          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile
+          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile || echo "Clean failed, continuing anyway"
           cd ..
 
       - name: Build and Release iOS
-        run: fastlane ios qa_release
+        run: |
+          set -o pipefail
+          fastlane ios qa_release 2>&1 | tee build_output.log
+        continue-on-error: true
+        id: ios_build
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -175,6 +199,33 @@ jobs:
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 6
           FASTLANE_HIDE_GITHUB_ISSUES: 1
           FASTLANE_SKIP_UPDATE_CHECK: 1
+
+      - name: Extract and Display Build Errors
+        if: steps.ios_build.outcome == 'failure'
+        run: |
+          echo "=== BUILD FAILED ==="
+          echo "Extracting compilation errors from build output..."
+          echo ""
+          
+          # Extract error lines
+          grep -E "(error:|❌|ld:|Undefined symbol|duplicate symbol|No such module|framework not found)" build_output.log || echo "No specific error patterns found"
+          
+          echo ""
+          echo "=== Last 100 lines of build output ==="
+          tail -n 100 build_output.log
+          
+          echo ""
+          echo "Full build log saved to build_output.log artifact"
+          
+          exit 1
+
+      - name: Upload Full Build Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-full-build-output
+          path: build_output.log
+          retention-days: 7
 
       - name: Cleanup keychain
         if: always()

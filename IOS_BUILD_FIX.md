@@ -1,7 +1,9 @@
 # iOS Build Failure Fix for Xcode 16.1
 
 ## Problem
-PrecompileModule failure for RNFBApp and other modules when building with Xcode 16.1, plus iOS deployment target warnings. Also compatibility issues with React Native New Architecture.
+PrecompileModule failure for RNFBApp and other modules when building with Xcode 16.1, plus iOS deployment target warnings.
+
+**IMPORTANT**: React Native Reanimated 4.x requires New Architecture to be enabled. Do NOT disable `newArchEnabled`.
 
 ## Solutions Applied ✅
 
@@ -25,13 +27,7 @@ Added proper Xcode build settings to xcargs:
 ### 4. ✅ Added Build Cache Cleanup in CI/CD
 Added step in `qa-release.yml` to clean derived data and run `xcodebuild clean` before building.
 
-### 5. ✅ Disabled React Native New Architecture
-**File**: `app.config.ts`
-- Set `newArchEnabled: false` (temporarily) for Xcode 16.1 compatibility
-- Added `RCT_NEW_ARCH_ENABLED=0` to Fastfile xcargs
-- New Architecture has known issues with Xcode 16.1 and Firebase pods
-
-### 6. ✅ Added Verbose Build Logging
+### 5. ✅ Added Verbose Build Logging
 **Files**: `Fastfile`, `qa-release.yml`
 - Added `verbose: true` and `buildlog_path` to build_ios_app config
 - Added build log upload as artifact for easier debugging
@@ -69,7 +65,39 @@ After these changes, you should see:
 
 ## Additional Solutions (If Above Still Doesn't Work)
 
-### Option A: Force Xcode Version in CI/CD
+### Option A: Check for Specific Module Errors
+
+The "(2 failures)" message means 2 specific compilation errors occurred. Common patterns:
+
+**Firebase + New Architecture:**
+```
+error: Building for iOS, but the linked library 'libFirebaseCore.a' was built for iOS Simulator
+```
+**Fix**: Update Firebase to latest version:
+```bash
+npm update @react-native-firebase/app @react-native-firebase/messaging
+```
+
+**Reanimated + Xcode 16.1:**
+```
+error: Module 'RNReanimated' not found
+```
+**Fix**: Ensure Hermes is enabled and pods are reinstalled:
+```ruby
+# In Podfile, ensure:
+:hermes_enabled => true
+```
+
+**Notifee Build Errors:**
+```
+error: Building for iOS Simulator, but linking in dylib built for iOS
+```
+**Fix**: Update Notifee:
+```bash
+npm update @notifee/react-native
+```
+
+### Option B: Force Xcode Version in CI/CD (Last Resort)
 If your CI/CD supports multiple Xcode versions, force an earlier version:
 
 **In Fastfile, add at the top of `qa_release` lane:**
