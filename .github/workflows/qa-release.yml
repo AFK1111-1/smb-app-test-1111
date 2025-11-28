@@ -188,42 +188,52 @@ jobs:
           gem install xcodeproj
           echo ""
           
-          echo "📝 Modifying Xcode project settings to fix Firebase non-modular header errors..."
+          echo "📝 Modifying Pods project to fix Firebase non-modular header errors..."
           ruby << 'RUBY'
           require 'xcodeproj'
           
-          project_path = 'smbmobile.xcodeproj'
-          puts "Opening project: #{project_path}"
-          project = Xcodeproj::Project.open(project_path)
+          # Open the PODS project (not the main app project!)
+          pods_project_path = 'Pods/Pods.xcodeproj'
+          puts "Opening Pods project: #{pods_project_path}"
           
-          # Fix ALL Pod targets to ensure compatibility
+          unless File.exist?(pods_project_path)
+            puts "❌ ERROR: Pods project not found at #{pods_project_path}"
+            exit 1
+          end
+          
+          project = Xcodeproj::Project.open(pods_project_path)
+          
+          puts "Found #{project.targets.length} targets in Pods project"
+          puts ""
+          
+          # Fix ALL Pod targets
           fixed_targets = []
+          firebase_targets = []
+          
           project.targets.each do |target|
-            # Only modify Pod targets, not the main app
-            if target.name != 'smbmobile' && target.name != 'Pods-smbmobile'
-              target.build_configurations.each do |config|
-                # Disable non-modular header warning for all pods
-                config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
-                
-                # For Firebase/RNFB targets, also disable warnings as errors
-                if target.name.include?('RNFB') || target.name.include?('Firebase')
-                  config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-                  config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
-                end
-              end
+            target.build_configurations.each do |config|
+              # Disable non-modular header warning for ALL pod targets
+              config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
               
-              fixed_targets << target.name
+              # For Firebase/RNFB targets, also disable warnings as errors
+              if target.name.include?('RNFB') || target.name.include?('Firebase')
+                config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+                config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+                firebase_targets << target.name unless firebase_targets.include?(target.name)
+              end
             end
+            
+            fixed_targets << target.name
           end
           
           project.save
           
-          puts ""
           puts "✅ Modified #{fixed_targets.length} pod targets"
-          puts "Firebase/RNFB targets fixed:"
-          fixed_targets.select { |name| name.include?('RNFB') || name.include?('Firebase') }.each { |name| puts "   - #{name}" }
           puts ""
-          puts "✅ Xcode project settings updated successfully!"
+          puts "Firebase/RNFB targets fixed (#{firebase_targets.length}):"
+          firebase_targets.each { |name| puts "   - #{name}" }
+          puts ""
+          puts "✅ Pods project settings updated successfully!"
           RUBY
           
           echo ""
