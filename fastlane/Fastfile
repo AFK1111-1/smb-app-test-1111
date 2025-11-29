@@ -158,6 +158,40 @@ platform :ios do
         verbose: true
       )
       UI.success "✅ Provisioning profiles and certificates synced successfully"
+      
+      # Verify certificates and profiles were actually installed
+      UI.message ""
+      UI.message "🔍 Verifying Match installation..."
+      
+      # List certificates in keychain
+      UI.message "Certificates in keychain:"
+      sh("security find-identity -v -p codesigning #{ENV['KEYCHAIN_NAME']}", log: true)
+      
+      # List installed provisioning profiles
+      UI.message ""
+      UI.message "Installed provisioning profiles:"
+      profiles_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles/")
+      if Dir.exist?(profiles_dir)
+        sh("ls -lh '#{profiles_dir}'", log: true)
+        
+        # Count profiles for our app
+        profile_count = sh("ls '#{profiles_dir}' | grep -c 'com.insighture.smbmobile' || echo '0'", log: false).strip.to_i
+        if profile_count > 0
+          UI.success "✅ Found #{profile_count} profile(s) for com.insighture.smbmobile"
+        else
+          UI.error "❌ No profiles found for com.insighture.smbmobile!"
+          UI.error "Listing all profiles:"
+          sh("ls -la '#{profiles_dir}'", log: true)
+          raise "Provisioning profile not found after Match sync"
+        end
+      else
+        UI.error "❌ Provisioning Profiles directory does not exist: #{profiles_dir}"
+        raise "Provisioning Profiles directory missing"
+      end
+      
+      UI.message ""
+      UI.success "✅ Code signing verification complete"
+      
     rescue => ex
       UI.error "❌ Failed to sync provisioning profiles"
       UI.error "Error: #{ex.message}"
@@ -333,7 +367,7 @@ platform :ios do
         generateAppStoreInformation: true,
         manageAppVersionAndBuildNumber: true
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO SWIFT_OPTIMIZATION_LEVEL=Onone -allowProvisioningUpdates -UseModernBuildSystem=NO DEVELOPMENT_TEAM=96W7U4JYV4",
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO SWIFT_OPTIMIZATION_LEVEL=Onone -UseModernBuildSystem=NO DEVELOPMENT_TEAM=96W7U4JYV4 CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='match AppStore com.insighture.smbmobile' CODE_SIGN_IDENTITY='iPhone Distribution'",
       skip_profile_detection: true,
       buildlog_path: "fastlane/logs",
       verbose: true

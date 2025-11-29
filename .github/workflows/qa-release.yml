@@ -475,6 +475,52 @@ jobs:
           echo "🔍 Ready to run Fastlane..."
           echo "============================================="
 
+      - name: Verify Code Signing Setup
+        run: |
+          echo "🔐 ============================================="
+          echo "🔐 Verifying Code Signing Configuration"
+          echo "🔐 ============================================="
+          
+          echo ""
+          echo "=== Certificates in Keychain ==="
+          security find-identity -v -p codesigning "${{ env.KEYCHAIN_NAME }}" || echo "⚠️  No certificates found in keychain"
+          
+          echo ""
+          echo "=== Provisioning Profiles Directory ==="
+          if [ -d ~/Library/MobileDevice/Provisioning\ Profiles/ ]; then
+            echo "✅ Profiles directory exists"
+            echo "Number of profiles: $(ls -1 ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null | wc -l)"
+            echo ""
+            echo "Profile files:"
+            ls -lh ~/Library/MobileDevice/Provisioning\ Profiles/
+          else
+            echo "❌ Provisioning Profiles directory does not exist"
+            mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
+            echo "✅ Created Provisioning Profiles directory"
+          fi
+          
+          echo ""
+          echo "=== Checking for App-Specific Profile ==="
+          if ls ~/Library/MobileDevice/Provisioning\ Profiles/*com.insighture.smbmobile*.mobileprovision 2>/dev/null; then
+            echo "✅ Profile for com.insighture.smbmobile found!"
+            PROFILE=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*com.insighture.smbmobile*.mobileprovision 2>/dev/null | head -n 1)
+            echo ""
+            echo "Profile details:"
+            security cms -D -i "$PROFILE" | grep -A 5 "TeamIdentifier\|Name\|UUID\|ExpirationDate" || echo "Could not extract profile details"
+          else
+            echo "❌ WARNING: Profile for com.insighture.smbmobile NOT found!"
+            echo "This may cause build failures. Check that Fastlane Match ran successfully."
+          fi
+          
+          echo ""
+          echo "=== Xcode Project Code Signing Settings ==="
+          cd ios
+          xcodebuild -workspace smbmobile.xcworkspace -scheme smbmobile -configuration Release -showBuildSettings | grep -E "(CODE_SIGN|DEVELOPMENT_TEAM|PROVISIONING_PROFILE)" || echo "Could not retrieve build settings"
+          cd ..
+          
+          echo ""
+          echo "============================================="
+
       - name: Build and Release iOS
         run: |
           set -o pipefail

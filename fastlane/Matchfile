@@ -1,0 +1,39 @@
+git_url("git@github.com:insighture/smb-mobile-fastlane.git")
+type("appstore") # The default type, can be: appstore, adhoc, enterprise or development
+app_identifier(["com.insighture.smbmobile"])
+username("your-apple-developer-email@example.com") # Your Apple Developer Portal username
+
+# For all available options run `fastlane match --help`
+# Remove the # in the beginning of the line to enable the other options
+
+team_id("96W7U4JYV4") # Your team id
+# team_name("Your Team")
+# storage_mode("git")
+# git_branch("master")
+# git_basic_authorization("base64encoded")
+# git_bearer_authorization("base64encoded")
+# git_private_key("~/.ssh/id_rsa")
+# google_cloud_bucket_name("fastlane-keys")
+# google_cloud_keys_file("fastlane/your-google-cloud-account.json")
+# s3_region("us-east-1")
+# s3_access_key("s3_access_key")
+# s3_secret_access_key("s3_secret_access_key")
+# s3_bucket("s3_bucket")
+# s3_skip_encryption(false)
+# readonly(false)
+# generate_apple_certs(true)
+# skip_provisioning_profiles(false)
+# skip_certificate_matching(false)
+# shallow_clone(false)
+# clone_branch_directly(false)
+# force_for_new_devices(false)
+# skip_confirmation(false)
+# skip_docs(false)
+# platform("ios")
+# verbose(false)
+# force(false)
+# skip_certificate_verification(false)
+# keychain_name("login.keychain")
+# keychain_password("")
+# api_key_path("")
+# api_key({})
