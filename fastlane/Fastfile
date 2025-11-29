@@ -146,6 +146,11 @@ platform :ios do
     
     begin
       # Fetch App Store provisioning profiles and certificates from private Git repo
+      UI.message "Running Match with following settings:"
+      UI.message "  - Keychain: #{ENV['KEYCHAIN_NAME']}"
+      UI.message "  - Git URL: git@github.com:insighture/smb-mobile-fastlane.git"
+      UI.message "  - App ID: com.insighture.smbmobile"
+      
       match(
         type: "appstore",
         readonly: false,
@@ -157,45 +162,60 @@ platform :ios do
         keychain_name: ENV['KEYCHAIN_NAME'],
         verbose: true
       )
-      UI.success "✅ Provisioning profiles and certificates synced successfully"
       
-      # Verify certificates and profiles were actually installed
+      # CRITICAL: Verify certificates were installed
       UI.message ""
-      UI.message "🔍 Verifying Match installation..."
+      UI.important "🔍 CRITICAL: Verifying certificates were installed..."
       
-      # List certificates in keychain
-      UI.message "Certificates in keychain:"
-      sh("security find-identity -v -p codesigning #{ENV['KEYCHAIN_NAME']}", log: true)
+      cert_count = sh("security find-identity -v -p codesigning #{ENV['KEYCHAIN_NAME']} | grep -c 'iPhone Distribution' || echo '0'", log: false).strip.to_i
       
-      # List installed provisioning profiles
-      UI.message ""
-      UI.message "Installed provisioning profiles:"
-      profiles_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles/")
-      if Dir.exist?(profiles_dir)
-        sh("ls -lh '#{profiles_dir}'", log: true)
-        
-        # Count profiles for our app
-        profile_count = sh("ls '#{profiles_dir}' | grep -c 'com.insighture.smbmobile' || echo '0'", log: false).strip.to_i
-        if profile_count > 0
-          UI.success "✅ Found #{profile_count} profile(s) for com.insighture.smbmobile"
-        else
-          UI.error "❌ No profiles found for com.insighture.smbmobile!"
-          UI.error "Listing all profiles:"
-          sh("ls -la '#{profiles_dir}'", log: true)
-          raise "Provisioning profile not found after Match sync"
-        end
-      else
-        UI.error "❌ Provisioning Profiles directory does not exist: #{profiles_dir}"
-        raise "Provisioning Profiles directory missing"
+      if cert_count == 0
+        UI.error "❌ FATAL: No certificates installed by Match!"
+        UI.error ""
+        UI.error "This means one of:"
+        UI.error "1. Match repository is empty (no certificates/profiles exist)"
+        UI.error "2. SSH key cannot access the Match repository"
+        UI.error "3. MATCH_PASSWORD is incorrect"
+        UI.error "4. Certificates in Match repo are invalid/corrupted"
+        UI.error ""
+        UI.error "TO FIX:"
+        UI.error "1. Clone Match repo: git clone git@github.com:insighture/smb-mobile-fastlane.git"
+        UI.error "2. Check if certs/distribution/*.cer and *.p12 exist"
+        UI.error "3. If missing, run: fastlane match appstore --force_for_new_devices"
+        UI.error ""
+        UI.user_error! "Match failed to install certificates - BUILD CANNOT CONTINUE"
       end
       
-      UI.message ""
-      UI.success "✅ Code signing verification complete"
+      # CRITICAL: Verify profiles were installed
+      profiles_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles/")
+      profile_count = 0
+      
+      if Dir.exist?(profiles_dir)
+        profile_count = Dir.glob("#{profiles_dir}/*.mobileprovision").count
+      end
+      
+      if profile_count == 0
+        UI.error "❌ FATAL: No provisioning profiles installed by Match!"
+        UI.error ""
+        UI.error "TO FIX:"
+        UI.error "1. Clone Match repo: git clone git@github.com:insighture/smb-mobile-fastlane.git"
+        UI.error "2. Check if profiles/appstore/*.mobileprovision exists"
+        UI.error "3. If missing, run: fastlane match appstore --force_for_new_devices"
+        UI.error ""
+        UI.user_error! "Match failed to install provisioning profiles - BUILD CANNOT CONTINUE"
+      end
+      
+      UI.success "✅ Match installed #{cert_count} certificate(s) and #{profile_count} profile(s)"
       
     rescue => ex
-      UI.error "❌ Failed to sync provisioning profiles"
+      UI.error "❌ MATCH FAILED!"
       UI.error "Error: #{ex.message}"
-      UI.error "Backtrace: #{ex.backtrace.first(5).join("\n")}"
+      UI.error ""
+      UI.error "Common causes:"
+      UI.error "1. SSH key doesn't have access to Match repo"
+      UI.error "2. MATCH_PASSWORD is incorrect"
+      UI.error "3. Match repository is empty"
+      UI.error "4. Git URL is wrong"
       raise ex
     end
     

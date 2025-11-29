@@ -239,6 +239,86 @@ jobs:
         env:
           FASTLANE_MATCH_DEPLOY_KEY: ${{ secrets.FASTLANE_MATCH_DEPLOY_KEY }}
 
+      - name: Verify Match Repository Has Certificates
+        run: |
+          echo "🔍 Checking Match repository for certificates..."
+          
+          # Clone Match repo to temporary location
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          
+          if git clone git@github.com:insighture/smb-mobile-fastlane.git match_repo 2>&1; then
+            echo "✅ Match repository cloned successfully"
+            cd match_repo
+            
+            echo ""
+            echo "=== Repository structure ==="
+            ls -la
+            
+            echo ""
+            echo "=== Checking for certificates ==="
+            if [ -d "certs/distribution" ]; then
+              echo "✅ certs/distribution directory exists"
+              ls -lh certs/distribution/
+              
+              CERT_COUNT=$(find certs/distribution -name "*.cer" -o -name "*.p12" | wc -l)
+              if [ "$CERT_COUNT" -gt 0 ]; then
+                echo "✅ Found $CERT_COUNT certificate file(s)"
+              else
+                echo "❌ ERROR: No .cer or .p12 files in certs/distribution/"
+                echo ""
+                echo "TO FIX: Run 'fastlane match appstore' to generate certificates"
+                exit 1
+              fi
+            else
+              echo "❌ ERROR: certs/distribution directory does not exist"
+              echo ""
+              echo "Match repository structure:"
+              find . -type d -maxdepth 3
+              echo ""
+              echo "TO FIX: Run 'fastlane match appstore' to generate certificates"
+              exit 1
+            fi
+            
+            echo ""
+            echo "=== Checking for provisioning profiles ==="
+            if [ -d "profiles/appstore" ]; then
+              echo "✅ profiles/appstore directory exists"
+              ls -lh profiles/appstore/
+              
+              PROFILE_COUNT=$(find profiles/appstore -name "*.mobileprovision" | wc -l)
+              if [ "$PROFILE_COUNT" -gt 0 ]; then
+                echo "✅ Found $PROFILE_COUNT provisioning profile(s)"
+              else
+                echo "❌ ERROR: No .mobileprovision files in profiles/appstore/"
+                echo ""
+                echo "TO FIX: Run 'fastlane match appstore' to generate profiles"
+                exit 1
+              fi
+            else
+              echo "❌ ERROR: profiles/appstore directory does not exist"
+              echo ""
+              echo "TO FIX: Run 'fastlane match appstore' to generate profiles"
+              exit 1
+            fi
+            
+            echo ""
+            echo "✅ Match repository has all required files!"
+            
+          else
+            echo "❌ ERROR: Could not clone Match repository"
+            echo ""
+            echo "Possible causes:"
+            echo "1. SSH key doesn't have access to repository"
+            echo "2. Repository doesn't exist"
+            echo "3. Git URL is incorrect"
+            exit 1
+          fi
+          
+          # Cleanup
+          cd ~
+          rm -rf "$TEMP_DIR"
+
       - name: Setup Xcode 16.1
         uses: maxim-lobanov/setup-xcode@v1
         with:
