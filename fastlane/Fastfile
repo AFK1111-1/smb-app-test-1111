@@ -235,6 +235,59 @@ platform :ios do
     puts "  - Build: #{final_build}"
     puts ""
 
+    # Verify Podfile has the required fixes before building
+    puts "\n🔍 Verifying Podfile Configuration..."
+    podfile_path = "ios/Podfile"
+    if File.exist?(podfile_path)
+      podfile_content = File.read(podfile_path)
+      
+      puts "  Checking for required post_install hooks..."
+      required_settings = {
+        'post_install do |installer|' => 'Post-install hook',
+        'SWIFT_OPTIMIZATION_LEVEL' => 'Swift optimization fix',
+        'CLANG_ENABLE_MODULE_VERIFIER' => 'Module verifier fix',
+        'RNFB' => 'Firebase-specific fixes',
+        'IPHONEOS_DEPLOYMENT_TARGET' => 'Deployment target fix'
+      }
+      
+      missing_settings = []
+      required_settings.each do |setting, description|
+        if podfile_content.include?(setting)
+          puts "  ✅ #{description} present"
+        else
+          puts "  ❌ #{description} MISSING"
+          missing_settings << description
+        end
+      end
+      
+      if missing_settings.any?
+        puts "\n  ⚠️  WARNING: Podfile is missing required fixes:"
+        missing_settings.each { |s| puts "    - #{s}" }
+        puts "\n  💡 You may need to run: npx expo prebuild --clean"
+        puts "     This will regenerate the iOS project with correct settings"
+      else
+        puts "  ✅ All required Podfile fixes are present"
+      end
+      
+      # Display relevant parts of post_install
+      if podfile_content.include?('post_install')
+        puts "\n  📋 Post-install hook preview:"
+        post_install_section = podfile_content[/post_install.*?^end$/m]
+        if post_install_section
+          # Show first 30 lines of post_install
+          lines = post_install_section.lines.first(30)
+          lines.each { |line| puts "    #{line.chomp}" }
+          if post_install_section.lines.length > 30
+            puts "    ... (#{post_install_section.lines.length - 30} more lines)"
+          end
+        end
+      end
+    else
+      puts "  ❌ Podfile not found at: #{podfile_path}"
+      puts "     This is a critical error - iOS build cannot proceed"
+    end
+    puts ""
+    
     # Check and log build settings before building
     puts "\n🔍 Checking Build Settings..."
     begin
@@ -292,7 +345,7 @@ platform :ios do
         },
         teamID: "96W7U4JYV4"
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO SWIFT_OPTIMIZATION_LEVEL=-Onone",
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO",
       skip_profile_detection: true,
       verbose: true,
       buildlog_path: "./ios/build/logs"
@@ -324,6 +377,9 @@ platform :ios do
       puts "\n🔍 Checking build logs for detailed error information..."
       
       # Try to find and display the build log
+      log_content = nil
+      latest_log = nil
+      
       if Dir.exist?("./ios/build/logs")
         log_files = Dir.glob("./ios/build/logs/**/*.log")
         if log_files.any?
@@ -332,37 +388,111 @@ platform :ios do
           
           # Display the last log file (most recent)
           latest_log = log_files.max_by { |f| File.mtime(f) }
-          puts "\n📖 Latest Build Log Content (last 100 lines):"
-          puts "-" * 80
           log_content = File.read(latest_log)
-          puts log_content.lines.last(100).join
+          
+          puts "\n📖 Analyzing Build Log: #{latest_log}"
           puts "-" * 80
+          
+          # Extract error lines
+          error_lines = []
+          log_content.lines.each_with_index do |line, index|
+            if line =~ /error:|fatal error:|❌|🛑|\*\* ARCHIVE FAILED \*\*/i
+              # Get context around error (10 lines before and after)
+              start_idx = [0, index - 10].max
+              end_idx = [log_content.lines.length - 1, index + 10].min
+              error_lines.concat(log_content.lines[start_idx..end_idx])
+              error_lines << "\n--- Error Context End ---\n"
+            end
+          end
+          
+          if error_lines.any?
+            puts "\n🔴 ERROR DETAILS FROM BUILD LOG:"
+            puts error_lines.uniq.join
+          else
+            puts "\n⚠️  No specific error markers found, showing last 150 lines:"
+            puts log_content.lines.last(150).join
+          end
+          puts "-" * 80
+        else
+          puts "  ⚠️  No log files found in ./ios/build/logs/"
         end
+      else
+        puts "  ⚠️  Build logs directory not found: ./ios/build/logs/"
       end
       
-      # Look for specific error patterns
-      puts "\n🔍 Common Error Patterns:"
-      error_message = ex.message.downcase
-      if error_message.include?('swift_optimization_level')
+      # Look for specific error patterns in both exception and log
+      puts "\n🔍 Analyzing Error Patterns:"
+      full_error_text = "#{ex.message} #{log_content}".downcase
+      
+      found_issues = []
+      
+      if full_error_text.include?('swift_optimization_level')
+        found_issues << "SWIFT_OPTIMIZATION_LEVEL mismatch"
         puts "  ⚠️  SWIFT_OPTIMIZATION_LEVEL mismatch detected"
-        puts "     Recommendation: Check Podfile post_install hook"
-      end
-      if error_message.include?('rnfbmessaging') || error_message.include?('firebase')
-        puts "  ⚠️  Firebase/RNFBMessaging compilation error detected"
-        puts "     Recommendation: Check Firebase pod versions and Swift settings"
-      end
-      if error_message.include?('module')
-        puts "  ⚠️  Module compilation error detected"
-        puts "     Recommendation: Check CLANG_ENABLE_MODULE_VERIFIER settings"
+        puts "     Issue: Different optimization levels between targets"
+        puts "     Solution: Podfile post_install hook should normalize this"
       end
       
-      puts "\n💡 Troubleshooting Steps:"
-      puts "  1. Check if 'pod install' was run successfully"
-      puts "  2. Verify Podfile post_install hooks are applied"
-      puts "  3. Check Swift version compatibility"
-      puts "  4. Verify Firebase dependencies are compatible"
-      puts "  5. Review full build logs above for compilation errors"
+      if full_error_text.include?('rnfbmessaging')
+        found_issues << "RNFBMessaging compilation error"
+        puts "  ⚠️  RNFBMessaging compilation error detected"
+        puts "     Issue: Firebase messaging module failing to compile"
+        puts "     Check: Firebase SDK version compatibility"
+      end
+      
+      if full_error_text.include?('firebase') && !found_issues.include?("RNFBMessaging compilation error")
+        found_issues << "Firebase-related error"
+        puts "  ⚠️  Firebase-related error detected"
+        puts "     Check: Firebase dependencies and versions"
+      end
+      
+      if full_error_text =~ /module.*not found|module.*error/
+        found_issues << "Module compilation error"
+        puts "  ⚠️  Module compilation/import error detected"
+        puts "     Issue: Module precompilation or import failure"
+        puts "     Solution: Check CLANG_ENABLE_MODULE_VERIFIER settings"
+      end
+      
+      if full_error_text.include?('usernotifications')
+        found_issues << "UserNotifications framework issue"
+        puts "  ⚠️  UserNotifications framework issue detected"
+        puts "     Issue: Missing or incorrect UserNotifications import"
+        puts "     Solution: Check framework imports in RNFBMessaging"
+      end
+      
+      if full_error_text.include?('undeclared identifier') || full_error_text.include?('unknown type name')
+        found_issues << "Missing type/identifier"
+        puts "  ⚠️  Undeclared identifier or unknown type detected"
+        puts "     Issue: Missing import or header file"
+        puts "     Solution: Check header imports and framework linking"
+      end
+      
+      if found_issues.empty?
+        puts "  ℹ️  No specific error patterns identified"
+        puts "     Review the detailed error log above"
+      end
+      
+      puts "\n💡 Recommended Troubleshooting Steps:"
+      puts "  1. Check the detailed error context above for the root cause"
+      puts "  2. Verify 'pod install' ran successfully after Podfile changes"
+      puts "  3. Check if Podfile post_install hooks are properly configured"
+      puts "  4. Verify Firebase pod versions are compatible with Xcode 16.1"
+      puts "  5. Check if RNFBMessaging source files have correct imports"
+      puts "  6. Try cleaning: cd ios && pod deintegrate && pod install"
       puts ""
+      
+      # Save error summary to file for debugging
+      if latest_log
+        summary_file = "./ios/build/logs/error_summary.txt"
+        File.write(summary_file, "=" * 80 + "\n")
+        File.write(summary_file, "BUILD ERROR SUMMARY\n", mode: 'a')
+        File.write(summary_file, "=" * 80 + "\n", mode: 'a')
+        File.write(summary_file, "Time: #{Time.now}\n", mode: 'a')
+        File.write(summary_file, "Error: #{ex.message}\n", mode: 'a')
+        File.write(summary_file, "Issues Found: #{found_issues.join(', ')}\n", mode: 'a')
+        File.write(summary_file, "=" * 80 + "\n", mode: 'a')
+        puts "📝 Error summary saved to: #{summary_file}"
+      end
       
       raise ex
     end
