@@ -163,6 +163,40 @@ platform :ios do
     puts "\n"
     # ===== DIAGNOSTIC LOGGING END =====
 
+    # Fail-fast checks for critical files
+    puts "\n🔍 Running fail-fast checks..."
+    missing_items = []
+    
+    unless File.exist?("ios/smbmobile.xcworkspace")
+      missing_items << "ios/smbmobile.xcworkspace"
+    end
+    
+    unless File.exist?("ios/smbmobile.xcodeproj")
+      missing_items << "ios/smbmobile.xcodeproj"
+    end
+    
+    unless File.exist?("ios/Podfile")
+      missing_items << "ios/Podfile"
+    end
+    
+    unless Dir.exist?("ios/Pods")
+      missing_items << "ios/Pods directory"
+    end
+    
+    unless missing_items.empty?
+      puts "\n❌ CRITICAL ERROR: Missing required iOS project files:"
+      missing_items.each { |item| puts "  - #{item}" }
+      puts "\n💡 Possible solutions:"
+      puts "  1. Ensure 'expo prebuild --platform ios' has been run successfully"
+      puts "  2. Ensure 'pod install' has completed in the ios directory"
+      puts "  3. Check that you're running from the project root directory"
+      puts "  4. Review the prebuild logs for any errors"
+      puts "\n" + "=" * 80
+      UI.user_error!("iOS project files are missing. Please run prebuild before building.")
+    end
+    
+    puts "✅ All critical files present\n"
+
     # Setup App Store Connect API authentication
     puts "\n🔑 Setting up App Store Connect API authentication..."
     api_key = app_store_connect_api_key(
