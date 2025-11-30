@@ -27,11 +27,16 @@ const withPodfileModifications: ConfigPlugin = (config) => {
       // Post-install hook to fix Xcode 16.1 compatibility issues
       const postInstallHook = `
   post_install do |installer|
+    puts "\\n🔧 Running post_install hook - Applying iOS build fixes..."
+    
     installer.pods_project.targets.each do |target|
+      puts "  📦 Configuring target: #{target.name}"
+      
       target.build_configurations.each do |config|
         # Fix deployment target - must be at least iOS 12.0 for Xcode 16.1
         deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
         if deployment_target && deployment_target.to_f < 12.0
+          puts "    ✅ Setting IPHONEOS_DEPLOYMENT_TARGET to 12.0 (was #{deployment_target})"
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
         end
 
@@ -44,6 +49,16 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         # Set Swift compilation mode to whole module for better compatibility
         config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
         
+        # Fix Swift optimization level mismatch - set to -Onone for Debug builds
+        # This fixes the "expected -Onone" error when SWIFT_VERSION is set
+        if config.name == 'Debug'
+          config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
+          puts "    ✅ Setting SWIFT_OPTIMIZATION_LEVEL to -Onone for Debug"
+        elsif config.name == 'Release'
+          config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-O'
+          puts "    ✅ Setting SWIFT_OPTIMIZATION_LEVEL to -O for Release"
+        end
+        
         # Disable module debugging (can cause issues with precompilation)
         config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
         
@@ -53,18 +68,30 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         
         # For Firebase modules specifically, ensure warnings aren't treated as errors
         if target.name.include?('RNFB') || target.name.include?('Firebase')
+          puts "    🔥 Applying Firebase-specific settings to #{target.name}"
           config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
           config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+          # Ensure Firebase modules compile in Release mode without optimization issues
+          config.build_settings['GCC_OPTIMIZATION_LEVEL'] = '0'
+        end
+        
+        # For React-Core privacy target specifically
+        if target.name.include?('React-Core') && target.name.include?('privacy')
+          puts "    ⚛️  Applying React-Core privacy target fixes"
+          config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
         end
       end
     end
 
     # Also update the project-level settings
+    puts "\\n  🏗 Configuring project-level settings..."
     installer.pods_project.build_configurations.each do |config|
       config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
       config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
     end
+    
+    puts "\\n✅ Post-install hook completed successfully\\n"
   end`;
 
       // Check if post_install already exists
@@ -84,28 +111,52 @@ const withPodfileModifications: ConfigPlugin = (config) => {
             
             const additionalConfig = `
     # Xcode 16.1 compatibility fixes
+    puts "\\n🔧 Applying Xcode 16.1 compatibility fixes..."
     installer.pods_project.targets.each do |target|
+      puts "  📦 Configuring target: #{target.name}"
       target.build_configurations.each do |config|
         deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
         if deployment_target && deployment_target.to_f < 12.0
+          puts "    ✅ Setting IPHONEOS_DEPLOYMENT_TARGET to 12.0"
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
         end
         config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
         config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
+        
+        # Fix Swift optimization level mismatch
+        if config.name == 'Debug'
+          config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
+          puts "    ✅ Setting SWIFT_OPTIMIZATION_LEVEL to -Onone for Debug"
+        elsif config.name == 'Release'
+          config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-O'
+          puts "    ✅ Setting SWIFT_OPTIMIZATION_LEVEL to -O for Release"
+        end
+        
         config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
         config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
+        
         if target.name.include?('RNFB') || target.name.include?('Firebase')
+          puts "    🔥 Applying Firebase-specific settings"
           config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
           config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+          config.build_settings['GCC_OPTIMIZATION_LEVEL'] = '0'
+        end
+        
+        # For React-Core privacy target specifically
+        if target.name.include?('React-Core') && target.name.include?('privacy')
+          puts "    ⚛️  Applying React-Core privacy target fixes"
+          config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
         end
       end
     end
+    puts "  🏗 Configuring project-level settings..."
     installer.pods_project.build_configurations.each do |config|
       config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
       config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
     end
+    puts "✅ Xcode 16.1 compatibility fixes applied\\n"
 `;
             
             contents = contents.replace(
