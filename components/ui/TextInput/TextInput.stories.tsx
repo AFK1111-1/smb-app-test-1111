@@ -1,7 +1,6 @@
 import { Meta, StoryObj } from '@storybook/react';
 import React from 'react';
 import { View } from 'react-native';
-import { TextInput as PaperTextInput } from 'react-native-paper';
 import TextInput from '.';
 
 const meta = {

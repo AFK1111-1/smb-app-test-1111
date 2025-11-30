@@ -3,7 +3,6 @@ import {
   useDeleteUserAvatar,
   useDeleteUserById,
   useGenerateAvatarUploadURL,
-  useUpdateCurrentUser,
   useUpdateUserAvatar,
 } from '@/hooks/api/use-users';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,8 +30,7 @@ export default function ProfileScreen() {
     useUpdateUserAvatar();
   const { mutateAsync: deleteUserAvatar, isPending: isAvatarDeleting } =
     useDeleteUserAvatar();
-  const { mutate: updateCurrentUser, isPending: isUserUpdating } =
-    useUpdateCurrentUser();
+
   return (
     <ProfileTemplate
       t={t}
@@ -46,8 +44,6 @@ export default function ProfileScreen() {
       queryClient={queryClient}
       updateUserAvatar={updateUserAvatar}
       generateAvatarUploadURL={generateAvatarUploadURL}
-      isUserUpdating={isUserUpdating}
-      updateCurrentUser={updateCurrentUser}
     />
   );
 }

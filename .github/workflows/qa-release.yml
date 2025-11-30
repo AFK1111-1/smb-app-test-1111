@@ -46,36 +46,36 @@ jobs:
           mkdir -p credentials/android
           mkdir -p credentials/ios
 
-      - name: Setup Android Keystore
-        run: >
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode >
-          credentials/android/release.keystore
+      # - name: Setup Android Keystore
+      #   run: >
+      #     echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode >
+      #     credentials/android/release.keystore
 
-      - name: Setup Google Play Service Key
-        run: |
-          echo "${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}" | base64 --decode > credentials/android/google-play-service-key.json
+      # - name: Setup Google Play Service Key
+      #   run: |
+      #     echo "${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}" | base64 --decode > credentials/android/google-play-service-key.json
 
-      - name: Setup Google Services JSON for Android
-        run: >
-          echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode >
-          google-services.json
+      # - name: Setup Google Services JSON for Android
+      #   run: >
+      #     echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode >
+      #     google-services.json
 
-      - name: Expo Prebuild for Android
-        run: npm run prebuild -- --platform android --clean
+      # - name: Expo Prebuild for Android
+      #   run: npm run prebuild -- --platform android --clean
 
-      - name: Build and Release Android
-        run: fastlane android qa_release
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      # - name: Build and Release Android
+      #   run: fastlane android qa_release
+      #   env:
+      #     ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      #     ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      #     ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Upload Android Release AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          retention-days: 30
+      # - name: Upload Android Release AAB
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: android-release-aab
+      #     path: android/app/build/outputs/bundle/release/app-release.aab
+      #     retention-days: 30
 
       - name: Setup Apple API Key
         run: |
@@ -96,13 +96,44 @@ jobs:
           GoogleService-Info.plist
 
       - name: Expo Prebuild for iOS
-        run: npm run prebuild -- --platform ios --clean
+        run: |
+          echo "🔨 Starting Expo Prebuild for iOS..."
+          npm run prebuild -- --platform ios
+          
+          echo "✅ Prebuild completed, verifying iOS directory..."
+          if [ ! -d "ios" ]; then
+            echo "❌ ERROR: ios directory was not created!"
+            exit 1
+          fi
+          
+          if [ ! -d "ios/smbmobile.xcworkspace" ] && [ ! -d "ios/smbmobile.xcodeproj" ]; then
+            echo "❌ ERROR: Neither workspace nor project was created!"
+            exit 1
+          fi
+          
+          echo "✅ iOS project structure verified"
+          ls -la ios/
 
       - name: Install CocoaPods dependencies
         run: |
+          echo "📦 Installing CocoaPods dependencies..."
           cd ios
           pod install
           cd ..
+          
+          echo "✅ CocoaPods installation completed"
+          echo "📁 Verifying workspace..."
+          if [ -d "ios/smbmobile.xcworkspace" ]; then
+            echo "✅ Workspace verified: ios/smbmobile.xcworkspace"
+          else
+            echo "❌ ERROR: Workspace not found after pod install!"
+            exit 1
+          fi
+
+      - name: Run iOS Setup Verification
+        run: |
+          chmod +x scripts/verify-ios-setup.sh
+          ./scripts/verify-ios-setup.sh
 
       - name: Setup SSH for Fastlane Match
         run: |
@@ -158,10 +189,59 @@ jobs:
 
       - name: Clean Xcode build cache
         run: |
+          echo "🧹 Cleaning Xcode build cache..."
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
-          cd ios
-          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile
-          cd ..
+          
+          if [ -d "ios/smbmobile.xcworkspace" ]; then
+            echo "🧹 Cleaning workspace..."
+            cd ios
+            xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile || echo "⚠️  Clean command completed with warnings"
+            cd ..
+          else
+            echo "⚠️  Workspace not found, skipping xcodebuild clean"
+          fi
+          
+          echo "✅ Clean completed"
+
+      - name: Verify iOS Build Prerequisites
+        run: |
+          echo "🔍 Verifying iOS build prerequisites..."
+          
+          # Check iOS directory
+          if [ ! -d "ios" ]; then
+            echo "❌ FATAL: ios directory does not exist!"
+            exit 1
+          fi
+          
+          # Check workspace
+          if [ ! -d "ios/smbmobile.xcworkspace" ]; then
+            echo "❌ FATAL: ios/smbmobile.xcworkspace does not exist!"
+            echo "Available files in ios/:"
+            ls -la ios/
+            exit 1
+          fi
+          
+          # Check project
+          if [ ! -d "ios/smbmobile.xcodeproj" ]; then
+            echo "❌ FATAL: ios/smbmobile.xcodeproj does not exist!"
+            exit 1
+          fi
+          
+          # Check Podfile
+          if [ ! -f "ios/Podfile" ]; then
+            echo "❌ FATAL: ios/Podfile does not exist!"
+            exit 1
+          fi
+          
+          # Check Pods
+          if [ ! -d "ios/Pods" ]; then
+            echo "❌ FATAL: ios/Pods directory does not exist!"
+            exit 1
+          fi
+          
+          echo "✅ All prerequisites verified!"
+          echo "📁 iOS directory structure:"
+          ls -la ios/ | head -20
 
       - name: Build and Release iOS
         run: fastlane ios qa_release

@@ -87,14 +87,127 @@ platform :ios do
 
   desc "Submit a new QA build to TestFlight"
   lane :qa_release do
+    # ===== DIAGNOSTIC LOGGING START =====
+    puts "=" * 80
+    puts "🔍 iOS QA Release Build - Diagnostic Information"
+    puts "=" * 80
+    
+    # Log environment information
+    puts "\n📋 Environment Information:"
+    puts "  - Ruby Version: #{RUBY_VERSION}"
+    puts "  - Fastlane Version: #{Fastlane::VERSION}"
+    puts "  - Working Directory: #{Dir.pwd}"
+    puts "  - Xcode Path: #{`xcode-select -p`.strip}"
+    puts "  - Xcode Version: #{`xcodebuild -version`.lines.first.strip}"
+    
+    # Log Xcode version details
+    xcode_info = `xcodebuild -version`.strip
+    puts "\n🛠 Xcode Details:"
+    xcode_info.lines.each { |line| puts "  #{line.strip}" }
+    
+    # Check for iOS workspace and scheme
+    puts "\n📁 Project Structure:"
+    if File.exist?("ios/smbmobile.xcworkspace")
+      puts "  ✅ Workspace found: ios/smbmobile.xcworkspace"
+    else
+      puts "  ❌ Workspace NOT found: ios/smbmobile.xcworkspace"
+    end
+    
+    if File.exist?("ios/smbmobile.xcodeproj")
+      puts "  ✅ Project found: ios/smbmobile.xcodeproj"
+    else
+      puts "  ❌ Project NOT found: ios/smbmobile.xcodeproj"
+    end
+    
+    # Log environment variables (sanitized)
+    puts "\n🔐 Environment Variables (sanitized):"
+    puts "  - APP_STORE_CONNECT_API_KEY_ID: #{ENV['APP_STORE_CONNECT_API_KEY_ID'] ? '✅ Set' : '❌ Not Set'}"
+    puts "  - APP_STORE_CONNECT_ISSUER_ID: #{ENV['APP_STORE_CONNECT_ISSUER_ID'] ? '✅ Set' : '❌ Not Set'}"
+    puts "  - KEYCHAIN_PASSWORD: #{ENV['KEYCHAIN_PASSWORD'] ? '✅ Set' : '❌ Not Set'}"
+    puts "  - KEYCHAIN_NAME: #{ENV['KEYCHAIN_NAME'] ? '✅ Set' : '❌ Not Set'}"
+    
+    # Check Podfile and Pods
+    puts "\n📦 CocoaPods Status:"
+    if File.exist?("ios/Podfile")
+      puts "  ✅ Podfile found"
+      podfile_content = File.read("ios/Podfile")
+      puts "  - Podfile size: #{podfile_content.length} bytes"
+      if podfile_content.include?("post_install")
+        puts "  ✅ post_install hook present"
+      else
+        puts "  ⚠️  post_install hook NOT found"
+      end
+    else
+      puts "  ❌ Podfile NOT found"
+    end
+    
+    if File.exist?("ios/Podfile.lock")
+      puts "  ✅ Podfile.lock found"
+    else
+      puts "  ⚠️  Podfile.lock NOT found"
+    end
+    
+    if Dir.exist?("ios/Pods")
+      puts "  ✅ Pods directory exists"
+      rnfb_messaging_path = "ios/Pods/RNFBMessaging"
+      if Dir.exist?(rnfb_messaging_path)
+        puts "  ✅ RNFBMessaging pod found"
+      else
+        puts "  ⚠️  RNFBMessaging pod NOT found"
+      end
+    else
+      puts "  ⚠️  Pods directory NOT found"
+    end
+    
+    puts "=" * 80
+    puts "\n"
+    # ===== DIAGNOSTIC LOGGING END =====
+
+    # Fail-fast checks for critical files
+    puts "\n🔍 Running fail-fast checks..."
+    missing_items = []
+    
+    unless File.exist?("ios/smbmobile.xcworkspace")
+      missing_items << "ios/smbmobile.xcworkspace"
+    end
+    
+    unless File.exist?("ios/smbmobile.xcodeproj")
+      missing_items << "ios/smbmobile.xcodeproj"
+    end
+    
+    unless File.exist?("ios/Podfile")
+      missing_items << "ios/Podfile"
+    end
+    
+    unless Dir.exist?("ios/Pods")
+      missing_items << "ios/Pods directory"
+    end
+    
+    unless missing_items.empty?
+      puts "\n❌ CRITICAL ERROR: Missing required iOS project files:"
+      missing_items.each { |item| puts "  - #{item}" }
+      puts "\n💡 Possible solutions:"
+      puts "  1. Ensure 'expo prebuild --platform ios' has been run successfully"
+      puts "  2. Ensure 'pod install' has completed in the ios directory"
+      puts "  3. Check that you're running from the project root directory"
+      puts "  4. Review the prebuild logs for any errors"
+      puts "\n" + "=" * 80
+      UI.user_error!("iOS project files are missing. Please run prebuild before building.")
+    end
+    
+    puts "✅ All critical files present\n"
+
     # Setup App Store Connect API authentication
+    puts "\n🔑 Setting up App Store Connect API authentication..."
     api_key = app_store_connect_api_key(
       key_id: ENV['APP_STORE_CONNECT_API_KEY_ID'],
       issuer_id: ENV['APP_STORE_CONNECT_ISSUER_ID'],
       key_filepath: "#{Dir.pwd}/../credentials/ios/AuthKey.p8"
     )
+    puts "✅ API Key configured successfully\n"
 
     # Fetch App Store provisioning profiles and certificates from private Git repo
+    puts "\n📱 Fetching provisioning profiles and certificates..."
     match(
       type: "appstore",
       readonly: false,
@@ -105,7 +218,9 @@ platform :ios do
       keychain_password: ENV['KEYCHAIN_PASSWORD'],
       keychain_name: ENV['KEYCHAIN_NAME']
     )
+    puts "✅ Provisioning profiles fetched successfully\n"
     
+    puts "\n🔐 Updating code signing settings..."
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "ios/smbmobile.xcodeproj",
@@ -114,28 +229,141 @@ platform :ios do
       code_sign_identity: "iPhone Distribution",
       targets: ["smbmobile"]
     )
+    puts "✅ Code signing configured successfully\n"
 
     # Increment version number
+    puts "\n🔢 Incrementing version number..."
     increment_version_number(
       xcodeproj: "ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
+    current_version = get_version_number(xcodeproj: "ios/smbmobile.xcodeproj")
+    puts "✅ Version updated to: #{current_version}\n"
     
     # Get latest TestFlight build and increment
+    puts "\n🔢 Fetching and incrementing build number..."
     begin
       latest_build = latest_testflight_build_number(
         app_identifier: "com.insighture.smbmobile",
         api_key: api_key
       )
+      puts "  - Latest TestFlight build: #{latest_build}"
       increment_build_number(
         xcodeproj: "ios/smbmobile.xcodeproj",
         build_number: latest_build + 1
       )
+      puts "✅ Build number set to: #{latest_build + 1}\n"
     rescue => ex
+      puts "⚠️  Could not fetch latest build number: #{ex.message}"
+      puts "  Using default increment..."
       increment_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
+      current_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
+      puts "✅ Build number set to: #{current_build}\n"
     end
 
+    # Log current version and build number
+    final_version = get_version_number(xcodeproj: "ios/smbmobile.xcodeproj")
+    final_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
+    puts "\n📱 Final Build Information:"
+    puts "  - Version: #{final_version}"
+    puts "  - Build: #{final_build}"
+    puts ""
+
+    # Verify Podfile has the required fixes before building
+    puts "\n🔍 Verifying Podfile Configuration..."
+    podfile_path = "ios/Podfile"
+    if File.exist?(podfile_path)
+      podfile_content = File.read(podfile_path)
+      
+      puts "  Checking for required post_install hooks..."
+      required_settings = {
+        'post_install do |installer|' => 'Post-install hook',
+        'SWIFT_OPTIMIZATION_LEVEL' => 'Swift optimization fix',
+        'CLANG_ENABLE_MODULE_VERIFIER' => 'Module verifier fix',
+        'RNFB' => 'Firebase-specific fixes',
+        'IPHONEOS_DEPLOYMENT_TARGET' => 'Deployment target fix'
+      }
+      
+      missing_settings = []
+      required_settings.each do |setting, description|
+        if podfile_content.include?(setting)
+          puts "  ✅ #{description} present"
+        else
+          puts "  ❌ #{description} MISSING"
+          missing_settings << description
+        end
+      end
+      
+      if missing_settings.any?
+        puts "\n  ⚠️  WARNING: Podfile is missing required fixes:"
+        missing_settings.each { |s| puts "    - #{s}" }
+        puts "\n  💡 You may need to run: npx expo prebuild --clean"
+        puts "     This will regenerate the iOS project with correct settings"
+      else
+        puts "  ✅ All required Podfile fixes are present"
+      end
+      
+      # Display relevant parts of post_install
+      if podfile_content.include?('post_install')
+        puts "\n  📋 Post-install hook preview:"
+        post_install_section = podfile_content[/post_install.*?^end$/m]
+        if post_install_section
+          # Show first 30 lines of post_install
+          lines = post_install_section.lines.first(30)
+          lines.each { |line| puts "    #{line.chomp}" }
+          if post_install_section.lines.length > 30
+            puts "    ... (#{post_install_section.lines.length - 30} more lines)"
+          end
+        end
+      end
+    else
+      puts "  ❌ Podfile not found at: #{podfile_path}"
+      puts "     This is a critical error - iOS build cannot proceed"
+    end
+    puts ""
+    
+    # Check and log build settings before building
+    puts "\n🔍 Checking Build Settings..."
+    begin
+      build_settings_output = `xcodebuild -workspace ios/smbmobile.xcworkspace -scheme smbmobile -configuration Release -showBuildSettings 2>&1`
+      
+      # Extract relevant settings
+      puts "\n📋 Key Build Settings:"
+      relevant_settings = [
+        'SWIFT_VERSION',
+        'SWIFT_OPTIMIZATION_LEVEL',
+        'SWIFT_COMPILATION_MODE',
+        'ENABLE_BITCODE',
+        'CLANG_ENABLE_MODULE_VERIFIER',
+        'CLANG_ENABLE_EXPLICIT_MODULES',
+        'IPHONEOS_DEPLOYMENT_TARGET',
+        'CODE_SIGN_IDENTITY',
+        'PROVISIONING_PROFILE_SPECIFIER'
+      ]
+      
+      relevant_settings.each do |setting|
+        matches = build_settings_output.scan(/#{setting} = (.+)/)
+        if matches.any?
+          puts "  - #{setting}: #{matches.first.first.strip}"
+        end
+      end
+      
+      # Check for RNFBMessaging specific settings
+      puts "\n📦 Checking RNFBMessaging Pod Settings..."
+      rnfb_settings = build_settings_output.lines.select { |line| line.include?('RNFBMessaging') }
+      if rnfb_settings.any?
+        puts "  ✅ RNFBMessaging found in build settings"
+      else
+        puts "  ⚠️  RNFBMessaging not found in build settings"
+      end
+      
+    rescue => ex
+      puts "⚠️  Could not retrieve build settings: #{ex.message}"
+    end
+    puts ""
+
     # Build configuration
+    puts "\n🏗 Build Configuration:"
     build_config = {
       workspace: "ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
@@ -152,36 +380,190 @@ platform :ios do
         teamID: "96W7U4JYV4"
       },
       xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO",
-      skip_profile_detection: true
+      skip_profile_detection: true,
+      verbose: true,
+      buildlog_path: "./ios/build/logs"
     }
+    
+    puts "  - Workspace: #{build_config[:workspace]}"
+    puts "  - Scheme: #{build_config[:scheme]}"
+    puts "  - Configuration: #{build_config[:configuration]}"
+    puts "  - Export Method: #{build_config[:export_method]}"
+    puts "  - XCArgs: #{build_config[:xcargs]}"
+    puts "  - Output: #{build_config[:output_directory]}/#{build_config[:output_name]}"
+    puts "  - Build Logs: #{build_config[:buildlog_path]}"
+    puts ""
 
     # Build and archive
-    build_ios_app(build_config)
+    puts "\n🚀 Starting iOS Archive Build..."
+    puts "=" * 80
+    begin
+      build_ios_app(build_config)
+      puts "\n" + "=" * 80
+      puts "✅ BUILD SUCCESSFUL"
+      puts "=" * 80
+    rescue => ex
+      puts "\n" + "=" * 80
+      puts "❌ BUILD FAILED"
+      puts "=" * 80
+      puts "\n📋 Error Details:"
+      puts "  - Error: #{ex.message}"
+      puts "\n🔍 Checking build logs for detailed error information..."
+      
+      # Try to find and display the build log
+      log_content = nil
+      latest_log = nil
+      
+      if Dir.exist?("./ios/build/logs")
+        log_files = Dir.glob("./ios/build/logs/**/*.log")
+        if log_files.any?
+          puts "\n📄 Build Log Files Found:"
+          log_files.each { |f| puts "  - #{f}" }
+          
+          # Display the last log file (most recent)
+          latest_log = log_files.max_by { |f| File.mtime(f) }
+          log_content = File.read(latest_log)
+          
+          puts "\n📖 Analyzing Build Log: #{latest_log}"
+          puts "-" * 80
+          
+          # Extract error lines
+          error_lines = []
+          log_content.lines.each_with_index do |line, index|
+            if line =~ /error:|fatal error:|❌|🛑|\*\* ARCHIVE FAILED \*\*/i
+              # Get context around error (10 lines before and after)
+              start_idx = [0, index - 10].max
+              end_idx = [log_content.lines.length - 1, index + 10].min
+              error_lines.concat(log_content.lines[start_idx..end_idx])
+              error_lines << "\n--- Error Context End ---\n"
+            end
+          end
+          
+          if error_lines.any?
+            puts "\n🔴 ERROR DETAILS FROM BUILD LOG:"
+            puts error_lines.uniq.join
+          else
+            puts "\n⚠️  No specific error markers found, showing last 150 lines:"
+            puts log_content.lines.last(150).join
+          end
+          puts "-" * 80
+        else
+          puts "  ⚠️  No log files found in ./ios/build/logs/"
+        end
+      else
+        puts "  ⚠️  Build logs directory not found: ./ios/build/logs/"
+      end
+      
+      # Look for specific error patterns in both exception and log
+      puts "\n🔍 Analyzing Error Patterns:"
+      full_error_text = "#{ex.message} #{log_content}".downcase
+      
+      found_issues = []
+      
+      if full_error_text.include?('swift_optimization_level')
+        found_issues << "SWIFT_OPTIMIZATION_LEVEL mismatch"
+        puts "  ⚠️  SWIFT_OPTIMIZATION_LEVEL mismatch detected"
+        puts "     Issue: Different optimization levels between targets"
+        puts "     Solution: Podfile post_install hook should normalize this"
+      end
+      
+      if full_error_text.include?('rnfbmessaging')
+        found_issues << "RNFBMessaging compilation error"
+        puts "  ⚠️  RNFBMessaging compilation error detected"
+        puts "     Issue: Firebase messaging module failing to compile"
+        puts "     Check: Firebase SDK version compatibility"
+      end
+      
+      if full_error_text.include?('firebase') && !found_issues.include?("RNFBMessaging compilation error")
+        found_issues << "Firebase-related error"
+        puts "  ⚠️  Firebase-related error detected"
+        puts "     Check: Firebase dependencies and versions"
+      end
+      
+      if full_error_text =~ /module.*not found|module.*error/
+        found_issues << "Module compilation error"
+        puts "  ⚠️  Module compilation/import error detected"
+        puts "     Issue: Module precompilation or import failure"
+        puts "     Solution: Check CLANG_ENABLE_MODULE_VERIFIER settings"
+      end
+      
+      if full_error_text.include?('usernotifications')
+        found_issues << "UserNotifications framework issue"
+        puts "  ⚠️  UserNotifications framework issue detected"
+        puts "     Issue: Missing or incorrect UserNotifications import"
+        puts "     Solution: Check framework imports in RNFBMessaging"
+      end
+      
+      if full_error_text.include?('undeclared identifier') || full_error_text.include?('unknown type name')
+        found_issues << "Missing type/identifier"
+        puts "  ⚠️  Undeclared identifier or unknown type detected"
+        puts "     Issue: Missing import or header file"
+        puts "     Solution: Check header imports and framework linking"
+      end
+      
+      if found_issues.empty?
+        puts "  ℹ️  No specific error patterns identified"
+        puts "     Review the detailed error log above"
+      end
+      
+      puts "\n💡 Recommended Troubleshooting Steps:"
+      puts "  1. Check the detailed error context above for the root cause"
+      puts "  2. Verify 'pod install' ran successfully after Podfile changes"
+      puts "  3. Check if Podfile post_install hooks are properly configured"
+      puts "  4. Verify Firebase pod versions are compatible with Xcode 16.1"
+      puts "  5. Check if RNFBMessaging source files have correct imports"
+      puts "  6. Try cleaning: cd ios && pod deintegrate && pod install"
+      puts ""
+      
+      # Save error summary to file for debugging
+      if latest_log
+        summary_file = "./ios/build/logs/error_summary.txt"
+        File.write(summary_file, "=" * 80 + "\n")
+        File.write(summary_file, "BUILD ERROR SUMMARY\n", mode: 'a')
+        File.write(summary_file, "=" * 80 + "\n", mode: 'a')
+        File.write(summary_file, "Time: #{Time.now}\n", mode: 'a')
+        File.write(summary_file, "Error: #{ex.message}\n", mode: 'a')
+        File.write(summary_file, "Issues Found: #{found_issues.join(', ')}\n", mode: 'a')
+        File.write(summary_file, "=" * 80 + "\n", mode: 'a')
+        puts "📝 Error summary saved to: #{summary_file}"
+      end
+      
+      raise ex
+    end
 
     # Upload to TestFlight with auto-retry on duplicate build errors
+    puts "\n📤 Uploading to TestFlight..."
     max_retries = 3
     retry_count = 0
     upload_success = false
     
     while retry_count < max_retries && !upload_success
       begin
+        puts "  - Attempt #{retry_count + 1} of #{max_retries}"
         upload_to_testflight(
           skip_waiting_for_build_processing: true,
           api_key: api_key
         )
         upload_success = true
+        puts "✅ Upload successful!\n"
       rescue => ex
+        puts "⚠️  Upload attempt #{retry_count + 1} failed: #{ex.message}"
+        
         if ex.message.include?("bundle version must be higher") || ex.message.include?("DUPLICATE")
           retry_count += 1
           
           if retry_count < max_retries
+            puts "  - Incrementing build number and retrying..."
             current_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
             increment_build_number(
               xcodeproj: "ios/smbmobile.xcodeproj",
               build_number: current_build.to_i + 1
             )
+            puts "  - New build number: #{current_build.to_i + 1}"
+            puts "  - Rebuilding..."
             build_ios_app(build_config)
           else
+            puts "❌ Max retries reached"
             raise ex
           end
         else
@@ -190,7 +572,16 @@ platform :ios do
       end
     end
 
+    puts "\n📝 Generating changelog from git commits..."
     changelog_from_git_commits
+    
+    puts "\n" + "=" * 80
+    puts "✅ QA RELEASE COMPLETED SUCCESSFULLY"
+    puts "=" * 80
+    puts "  - Version: #{final_version}"
+    puts "  - Build: #{final_build}"
+    puts "  - Upload: Successful"
+    puts "=" * 80
   end
 
   desc "Submit a new staging build to TestFlight"

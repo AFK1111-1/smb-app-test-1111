@@ -16,7 +16,6 @@ export default {
       supportsTablet: true,
       buildNumber: '1',
       bundleIdentifier: 'com.insighture.smbmobile',
-      appleTeamId: '96W7U4JYV4',
       infoPlist: {
         NSCameraUsageDescription:
           'Take a photo to use as your profile picture.',
@@ -30,7 +29,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: './assets/images/adaptive-icon.png',
+        foregroundImage: './assets/images/icon.png',
         backgroundColor: '#ffffff',
       },
       edgeToEdgeEnabled: true,
@@ -40,7 +39,7 @@ export default {
     web: {
       bundler: 'metro',
       output: 'static',
-      favicon: './assets/images/favicon.png',
+      favicon: './assets/images/icon.png',
     },
     plugins: [
       'expo-router',
@@ -48,10 +47,12 @@ export default {
       'expo-localization',
       '@react-native-firebase/app',
       '@react-native-firebase/messaging',
+      // Custom Firebase fix plugin
+      './plugins/withFirebaseFix',
       [
         'expo-splash-screen',
         {
-          image: './assets/images/splash-icon.png',
+          image: './assets/images/icon.png',
           imageWidth: 200,
           resizeMode: 'contain',
           backgroundColor: '#ffffff',
@@ -62,6 +63,7 @@ export default {
         {
           ios: {
             useFrameworks: 'static',
+            enableModulePrecompilation: false,
           },
           android: {
             enableProguardInReleaseBuilds: true,
@@ -70,6 +72,7 @@ export default {
         },
       ],
       ['./plugins/withPlugin.ts'],
+      ['./plugins/withPodfileModifications.ts'],
     ],
     experiments: {
       typedRoutes: true,

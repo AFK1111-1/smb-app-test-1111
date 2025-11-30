@@ -14,29 +14,26 @@ const Switch = (props: SwitchProps) => {
   const { label, labelPlacement = 'start', ...rest } = props;
   return (
     <View
-      style={{
-        alignItems: 'center',
-        gap: 16,
-        ...(labelPlacement === 'start'
-          ? { flexDirection: 'row' }
-          : { flexDirection: 'row-reverse' }),
-      }}
+      style={[
+        styles.mainContainer,
+        {
+          ...(labelPlacement === 'start'
+            ? { flexDirection: 'row' }
+            : { flexDirection: 'row-reverse' }),
+        },
+      ]}
     >
-      {label && (
-        <Text variant="bodyLarge" style={[styles.label, styles.labelStart]}>
-          {label}
-        </Text>
-      )}
-      <PaperSwitch {...rest} style={[styles.switch, props.style]} />
+      {label && <Text variant="bodyLarge">{label}</Text>}
+      <PaperSwitch {...rest} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  switch: {},
-  label: {},
-  labelStart: {},
-  labelEnd: {},
+  mainContainer: {
+    alignItems: 'center',
+    gap: 16,
+  },
 });
 
 export default Switch;
