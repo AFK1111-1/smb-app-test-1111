@@ -45,31 +45,6 @@ platform :android do
     changelog_from_git_commits
   end
 
-  desc "Submit a new staging build to play store"
-  lane :stg_release do
-    increment_version_name(
-      gradle_file_path: "android/app/build.gradle"
-    )
-    increment_version_code(
-      gradle_file_path: "android/app/build.gradle"
-    )
-
-    gradle(task: "clean bundleRelease", project_dir: "./android", properties: {
-      "android.injected.signing.store.file" => "#{Dir.pwd}/../credentials/android/release.keystore",
-      "android.injected.signing.store.password" => ENV['ANDROID_KEYSTORE_PASSWORD'],
-      "android.injected.signing.key.alias" => ENV['ANDROID_KEY_ALIAS'],
-      "android.injected.signing.key.password" => ENV['ANDROID_KEY_PASSWORD']
-    })
-
-    upload_to_play_store(
-      track: 'closed',
-      json_key: "credentials/android/google-play-service-key.json",
-      aab: "android/app/build/outputs/bundle/release/app-release.aab"
-    )
-
-    changelog_from_git_commits
-  end
-
   desc "Submit a new production build to play store"
   lane :production_release do
     increment_version_name(
@@ -112,394 +87,77 @@ platform :ios do
 
   desc "Submit a new QA build to TestFlight"
   lane :qa_release do
-    UI.important "🚀 ============================================="
-    UI.important "🚀 Starting iOS QA Release Lane"
-    UI.important "🚀 ============================================="
-    
-    UI.message "📋 Step 1/8: Setting up App Store Connect API authentication"
-    UI.message "   - Key ID: #{ENV['APP_STORE_CONNECT_API_KEY_ID']}"
-    UI.message "   - Issuer ID: #{ENV['APP_STORE_CONNECT_ISSUER_ID']}"
-    UI.message "   - Key file path: #{Dir.pwd}/../credentials/ios/AuthKey.p8"
-    
-    # Verify the key file exists
-    key_path = "#{Dir.pwd}/../credentials/ios/AuthKey.p8"
-    if File.exist?(key_path)
-      UI.success "✅ AuthKey.p8 file found (#{File.size(key_path)} bytes)"
-    else
-      UI.user_error! "❌ AuthKey.p8 file not found at: #{key_path}"
-    end
-    
     # Setup App Store Connect API authentication
     api_key = app_store_connect_api_key(
       key_id: ENV['APP_STORE_CONNECT_API_KEY_ID'],
       issuer_id: ENV['APP_STORE_CONNECT_ISSUER_ID'],
-      key_filepath: key_path
+      key_filepath: "#{Dir.pwd}/../credentials/ios/AuthKey.p8"
     )
-    UI.success "✅ App Store Connect API key configured"
 
-    UI.message ""
-    UI.message "📋 Step 2/8: Fetching provisioning profiles and certificates"
-    UI.message "   - Type: appstore"
-    UI.message "   - App Identifier: com.insighture.smbmobile"
-    UI.message "   - Git URL: git@github.com:insighture/smb-mobile-fastlane.git"
-    UI.message "   - Keychain: #{ENV['KEYCHAIN_NAME']}"
+    # Fetch App Store provisioning profiles and certificates from private Git repo
+    match(
+      type: "appstore",
+      readonly: false,
+      app_identifier: "com.insighture.smbmobile",
+      git_url: "git@github.com:insighture/smb-mobile-fastlane.git",
+      api_key: api_key,
+      force_for_new_devices: true,
+      keychain_password: ENV['KEYCHAIN_PASSWORD'],
+      keychain_name: ENV['KEYCHAIN_NAME']
+    )
     
-    begin
-      # Fetch App Store provisioning profiles and certificates from private Git repo
-      UI.message "Running Match with following settings:"
-      UI.message "  - Keychain: #{ENV['KEYCHAIN_NAME']}"
-      UI.message "  - Git URL: git@github.com:insighture/smb-mobile-fastlane.git"
-      UI.message "  - App ID: com.insighture.smbmobile"
-      
-      match(
-        type: "appstore",
-        readonly: false,
-        app_identifier: "com.insighture.smbmobile",
-        git_url: "git@github.com:insighture/smb-mobile-fastlane.git",
-        api_key: api_key,
-        force_for_new_devices: true,
-        keychain_password: ENV['KEYCHAIN_PASSWORD'],
-        keychain_name: ENV['KEYCHAIN_NAME'],
-        verbose: true
-      )
-      
-      # CRITICAL: Verify certificates were installed
-      UI.message ""
-      UI.important "🔍 CRITICAL: Verifying certificates were installed..."
-      
-      cert_count = sh("security find-identity -v -p codesigning #{ENV['KEYCHAIN_NAME']} | grep -c 'iPhone Distribution' || echo '0'", log: false).strip.to_i
-      
-      if cert_count == 0
-        UI.error "❌ FATAL: No certificates installed by Match!"
-        UI.error ""
-        UI.error "This means one of:"
-        UI.error "1. Match repository is empty (no certificates/profiles exist)"
-        UI.error "2. SSH key cannot access the Match repository"
-        UI.error "3. MATCH_PASSWORD is incorrect"
-        UI.error "4. Certificates in Match repo are invalid/corrupted"
-        UI.error ""
-        UI.error "TO FIX:"
-        UI.error "1. Clone Match repo: git clone git@github.com:insighture/smb-mobile-fastlane.git"
-        UI.error "2. Check if certs/distribution/*.cer and *.p12 exist"
-        UI.error "3. If missing, run: fastlane match appstore --force_for_new_devices"
-        UI.error ""
-        UI.user_error! "Match failed to install certificates - BUILD CANNOT CONTINUE"
-      end
-      
-      # CRITICAL: Verify profiles were installed
-      profiles_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles/")
-      profile_count = 0
-      
-      if Dir.exist?(profiles_dir)
-        profile_count = Dir.glob("#{profiles_dir}/*.mobileprovision").count
-      end
-      
-      if profile_count == 0
-        UI.error "❌ FATAL: No provisioning profiles installed by Match!"
-        UI.error ""
-        UI.error "TO FIX:"
-        UI.error "1. Clone Match repo: git clone git@github.com:insighture/smb-mobile-fastlane.git"
-        UI.error "2. Check if profiles/appstore/*.mobileprovision exists"
-        UI.error "3. If missing, run: fastlane match appstore --force_for_new_devices"
-        UI.error ""
-        UI.user_error! "Match failed to install provisioning profiles - BUILD CANNOT CONTINUE"
-      end
-      
-      UI.success "✅ Match installed #{cert_count} certificate(s) and #{profile_count} profile(s)"
-      
-    rescue => ex
-      UI.error "❌ MATCH FAILED!"
-      UI.error "Error: #{ex.message}"
-      UI.error ""
-      UI.error "Common causes:"
-      UI.error "1. SSH key doesn't have access to Match repo"
-      UI.error "2. MATCH_PASSWORD is incorrect"
-      UI.error "3. Match repository is empty"
-      UI.error "4. Git URL is wrong"
-      raise ex
-    end
-    
-    UI.message ""
-    UI.message "📋 Step 3/8: Updating code signing settings"
-    
-    # update_code_signing_settings requires path relative to fastlane execution (project root)
-    # Fastlane changes to project root for this action
-    project_path = "ios/smbmobile.xcodeproj"
-    
-    UI.message "   - Project: #{project_path}"
-    UI.message "   - Team ID: 96W7U4JYV4"
-    UI.message "   - Profile: match AppStore com.insighture.smbmobile"
-    UI.message "   - Identity: iPhone Distribution"
-    
-    begin
-      update_code_signing_settings(
-        use_automatic_signing: false,
-        path: project_path,
-        team_id: "96W7U4JYV4",
-        profile_name: "match AppStore com.insighture.smbmobile",
-        code_sign_identity: "iPhone Distribution",
-        targets: ["smbmobile"],
-        build_configurations: ["Release"]
-      )
-      UI.success "✅ Code signing settings updated"
-    rescue => ex
-      UI.error "❌ Failed to update code signing settings"
-      UI.error "Error: #{ex.message}"
-      raise ex
-    end
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "ios/smbmobile.xcodeproj",
+      team_id: "96W7U4JYV4",
+      profile_name: "match AppStore com.insighture.smbmobile",
+      code_sign_identity: "iPhone Distribution",
+      targets: ["smbmobile"]
+    )
 
-    UI.message ""
-    UI.message "📋 Step 4/8: Incrementing version number"
-    
-    # Version actions also run from project root context
-    project_path = "ios/smbmobile.xcodeproj"
-    
-    # Get current version first
-    current_version = get_version_number(xcodeproj: project_path)
-    UI.message "   - Current version: #{current_version}"
-    
     # Increment version number
     increment_version_number(
-      xcodeproj: project_path,
+      xcodeproj: "ios/smbmobile.xcodeproj",
       bump_type: "patch"
     )
     
-    new_version = get_version_number(xcodeproj: project_path)
-    UI.success "✅ Version incremented: #{current_version} → #{new_version}"
-    
-    UI.message ""
-    UI.message "📋 Step 5/8: Incrementing build number"
-    
-    # Build number actions also run from project root context
-    project_path = "ios/smbmobile.xcodeproj"
-    
     # Get latest TestFlight build and increment
     begin
-      UI.message "   - Fetching latest TestFlight build number..."
       latest_build = latest_testflight_build_number(
         app_identifier: "com.insighture.smbmobile",
         api_key: api_key
       )
-      UI.message "   - Latest TestFlight build: #{latest_build}"
-      new_build = latest_build + 1
-      UI.message "   - Setting new build number: #{new_build}"
-      
       increment_build_number(
-        xcodeproj: project_path,
-        build_number: new_build
+        xcodeproj: "ios/smbmobile.xcodeproj",
+        build_number: latest_build + 1
       )
-      UI.success "✅ Build number set to: #{new_build}"
     rescue => ex
-      UI.warning "⚠️  Could not fetch latest TestFlight build: #{ex.message}"
-      UI.message "   - Incrementing from current build number..."
-      current_build = get_build_number(xcodeproj: project_path)
-      UI.message "   - Current build: #{current_build}"
-      increment_build_number(xcodeproj: project_path)
-      new_build = get_build_number(xcodeproj: project_path)
-      UI.success "✅ Build number incremented to: #{new_build}"
+      increment_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
     end
 
-    UI.message ""
-    UI.message "📋 Step 6/8: Building iOS app"
-    UI.important "⚙️  Build Configuration:"
-    UI.message "   - Workspace: ios/smbmobile.xcworkspace"
-    UI.message "   - Scheme: smbmobile"
-    UI.message "   - Configuration: Release"
-    UI.message "   - Export method: app-store"
-    UI.message "   - Output: ios/build/smbmobile.ipa"
-    UI.message "   - SDK: iphoneos"
-    UI.message "   - Destination: generic/platform=iOS"
-    UI.message "   - Team ID: 96W7U4JYV4"
-    UI.message ""
-    
-    # Debug: Show current directory and file structure
-    UI.message "🔍 Debug: Checking file system..."
-    UI.message "   - Current directory: #{Dir.pwd}"
-    UI.message "   - Project root: #{File.expand_path('..')}"
-    
-    # Our Ruby code runs from fastlane/ dir, so use ../ios/ for checks
-    # But Fastlane actions will use ios/ (they chdir to project root)
-    ruby_ios_path = "../ios"
-    fastlane_ios_path = "ios"
-    
-    # Check if ios directory exists (from our current fastlane/ directory)
-    if Dir.exist?(ruby_ios_path)
-      UI.success "   - ✅ #{ruby_ios_path}/ directory exists"
-      UI.message "   - Files in #{ruby_ios_path}/ directory:"
-      Dir.entries(ruby_ios_path).select { |f| !f.start_with?('.') }.first(20).each do |f|
-        UI.message "     - #{f}#{File.directory?("#{ruby_ios_path}/#{f}") ? '/' : ''}"
-      end
-    else
-      UI.error "   - ❌ #{ruby_ios_path}/ directory does not exist!"
-    end
-    
-    UI.message ""
-    
-    # Verify workspace exists (from our current fastlane/ directory)
-    ruby_workspace_path = "#{ruby_ios_path}/smbmobile.xcworkspace"
-    fastlane_workspace_path = "#{fastlane_ios_path}/smbmobile.xcworkspace"
-    absolute_workspace_path = File.expand_path(ruby_workspace_path)
-    
-    UI.message "   - Looking for workspace at: #{ruby_workspace_path} (for verification)"
-    UI.message "   - Fastlane will use: #{fastlane_workspace_path} (after chdir to project root)"
-    UI.message "   - Absolute path: #{absolute_workspace_path}"
-    UI.message "   - Workspace exists: #{File.exist?(ruby_workspace_path)}"
-    
-    if File.exist?(ruby_workspace_path)
-      UI.success "✅ Workspace found: #{ruby_workspace_path}"
-    else
-      UI.error "❌ Workspace not found at: #{ruby_workspace_path}"
-      UI.error ""
-      UI.error "Troubleshooting information:"
-      UI.error "1. Check if Expo prebuild completed successfully"
-      UI.error "2. Check if pod install completed successfully"
-      UI.error "3. Verify the workspace was created in the correct location"
-      UI.error ""
-      UI.error "iOS directory structure:"
-      system("ls -la #{ruby_ios_path}/ 2>/dev/null || echo 'Cannot list #{ruby_ios_path}/ directory'")
-      UI.user_error! "❌ Workspace not found at: #{ruby_workspace_path}"
-    end
-    
-    # Verify scheme exists
-    UI.message "   - Verifying scheme..."
-    schemes = sh("xcodebuild -workspace #{ruby_workspace_path} -list | grep 'Schemes:' -A 100 || true", log: false)
-    UI.message "Available schemes:\n#{schemes}"
-    
     # Build configuration
-    # build_ios_app also changes to project root, so use ios/ paths
     build_config = {
       workspace: "ios/smbmobile.xcworkspace",
       scheme: "smbmobile",
       configuration: "Release",
-      output_directory: "build/ios",
-      output_name: "smbmobile.ipa",
-      include_bitcode: false,
-      include_symbols: true,
       export_method: "app-store",
-      sdk: "iphoneos",
-      export_team_id: "96W7U4JYV4",
+      output_directory: "./ios/build",
+      output_name: "smbmobile.ipa",
+      destination: "generic/platform=iOS",
       export_options: {
         method: "app-store",
         provisioningProfiles: {
           "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
         },
-        teamID: "96W7U4JYV4",
-        generateAppStoreInformation: true,
-        manageAppVersionAndBuildNumber: true
+        teamID: "96W7U4JYV4"
       },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO SWIFT_OPTIMIZATION_LEVEL=Onone -UseModernBuildSystem=NO DEVELOPMENT_TEAM=96W7U4JYV4 CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='match AppStore com.insighture.smbmobile' CODE_SIGN_IDENTITY='iPhone Distribution'",
-      skip_profile_detection: true,
-      buildlog_path: "fastlane/logs",
-      verbose: true
+      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO",
+      skip_profile_detection: true
     }
-    
-    UI.message ""
-    UI.important "🔨 Starting xcodebuild..."
-    UI.message "This may take several minutes..."
-    UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    # Store the current directory (should be project root)
-    project_root = Dir.pwd
-    UI.message "📁 Project root: #{project_root}"
-    
-    begin
-      UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      UI.header "🛠  Starting build process"
-      
-      # Print environment information
-      UI.message "💻 Environment:"
-      UI.message "- Ruby: #{`ruby -v`.strip}"
-      UI.message "- Xcode: #{`xcodebuild -version`.strip}"
-      UI.message "- Node: #{`node -v`.strip}" rescue nil
-      UI.message "- npm: #{`npm -v`.strip}" rescue nil
-      UI.message "- CocoaPods: #{`pod --version`.strip}" rescue nil
-      
-      # Check if iOS directory exists, if not run expo prebuild
-      unless Dir.exist?("ios")
-        UI.message "🔄 iOS directory not found. Running 'expo prebuild'..."
-        # Ensure we're in the project root before running expo prebuild
-        Dir.chdir("..") unless File.exist?("package.json")
-        sh("npx expo prebuild --clean --platform ios")
-      end
-      
-      # Clean build folder before building
-      UI.message "🔄 Cleaning build folder..."
-      sh("rm -rf ~/Library/Developer/Xcode/DerivedData/*")
-      
-      # Clean Xcode build
-      UI.message "🧹 Cleaning Xcode build..."
-      sh("xcodebuild clean -workspace ios/smbmobile.xcworkspace -scheme smbmobile")
-      
-      # Install pods with verbose output
-      UI.message "💎 Installing pods..."
-      Dir.chdir("ios") do
-        sh("pod install --repo-update --verbose")
-      end
-      
-      # Ensure we're in the project root before building
-      Dir.chdir(project_root) do
-        # Build the app with detailed logging
-        UI.message "🔨 Building application..."
-        build_ios_app(build_config)
-      end
-      
-      UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      UI.success "✅ Build completed successfully!"
-      
-      # Verify IPA was created
-      ipa_paths = [
-        "ios/build/smbmobile.ipa",
-        "ios/build/Release-iphoneos/smbmobile.ipa",
-        "build/ios/smbmobile.ipa",
-        "build/smbmobile.ipa",
-        "smbmobile.ipa"
-      ]
-      
-      found_ipa = false
-      ipa_paths.each do |path|
-        full_path = File.join(project_root, path)
-        if File.exist?(full_path)
-          ipa_size = File.size(full_path) / 1024.0 / 1024.0
-          UI.success "✅ IPA found at: #{full_path} (#{ipa_size.round(2)} MB)"
-          found_ipa = true
-          break
-        end
-      end
-      
-      unless found_ipa
-        UI.error "❌ Failed to locate IPA file. Check build logs for errors."
-        UI.error "Searched in the following locations:"
-        ipa_paths.each { |p| UI.error "- #{File.join(project_root, p)}" }
-        
-        # Additional debug information
-        UI.error "\n📂 Directory contents:"
-        build_dir = File.join(project_root, 'ios/build')
-        if Dir.exist?(build_dir)
-          UI.error "ios/build contents:"
-          Dir.glob(File.join(build_dir, '*')).each { |f| UI.error "- #{f}" }
-        else
-          UI.error "ios/build directory does not exist"
-        end
-      end
-    rescue => ex
-      UI.message "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      UI.error "❌ BUILD FAILED!"
-      UI.error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      UI.error "Error message: #{ex.message}"
-      UI.error ""
-      UI.error "Stack trace:"
-      ex.backtrace.first(10).each { |line| UI.error "  #{line}" }
-      UI.error ""
-      UI.error "Check the build logs at: ./fastlane/logs"
-      UI.error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      raise ex
-    end
 
-    UI.message ""
-    UI.message "📋 Step 7/8: Uploading to TestFlight"
-    UI.message "   - App Identifier: com.insighture.smbmobile"
-    UI.message "   - Skip processing wait: true"
-    
+    # Build and archive
+    build_ios_app(build_config)
+
     # Upload to TestFlight with auto-retry on duplicate build errors
     max_retries = 3
     retry_count = 0
@@ -507,60 +165,32 @@ platform :ios do
     
     while retry_count < max_retries && !upload_success
       begin
-        UI.message "   - Upload attempt #{retry_count + 1}/#{max_retries}"
-        
         upload_to_testflight(
           skip_waiting_for_build_processing: true,
           api_key: api_key
         )
-        
         upload_success = true
-        UI.success "✅ Successfully uploaded to TestFlight!"
-        
       rescue => ex
         if ex.message.include?("bundle version must be higher") || ex.message.include?("DUPLICATE")
           retry_count += 1
-          UI.warning "⚠️  Duplicate build number detected"
           
           if retry_count < max_retries
-            UI.message "   - Incrementing build number and retrying..."
-            project_path = "ios/smbmobile.xcodeproj"
-            current_build = get_build_number(xcodeproj: project_path)
-            new_build = current_build.to_i + 1
-            UI.message "   - New build number: #{new_build}"
-            
+            current_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
             increment_build_number(
-              xcodeproj: project_path,
-              build_number: new_build
+              xcodeproj: "ios/smbmobile.xcodeproj",
+              build_number: current_build.to_i + 1
             )
-            
-            UI.message "   - Rebuilding with new build number..."
             build_ios_app(build_config)
           else
-            UI.error "❌ Max retries reached for duplicate build"
             raise ex
           end
         else
-          UI.error "❌ Upload to TestFlight failed"
-          UI.error "Error: #{ex.message}"
           raise ex
         end
       end
     end
 
-    UI.message ""
-    UI.message "📋 Step 8/8: Generating changelog"
     changelog_from_git_commits
-    
-    UI.message ""
-    UI.success "🎉 ============================================="
-    UI.success "🎉 iOS QA Release Completed Successfully!"
-    UI.success "🎉 ============================================="
-    project_path = "ios/smbmobile.xcodeproj"
-    UI.success "   Version: #{get_version_number(xcodeproj: project_path)}"
-    UI.success "   Build: #{get_build_number(xcodeproj: project_path)}"
-    UI.success "   IPA: ios/build/smbmobile.ipa"
-    UI.success "============================================="
   end
 
   desc "Submit a new staging build to TestFlight"

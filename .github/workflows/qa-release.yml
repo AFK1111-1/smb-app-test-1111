@@ -46,40 +46,39 @@ jobs:
           mkdir -p credentials/android
           mkdir -p credentials/ios
 
-      # - name: Setup Android Keystore
-      #   run: >
-      #     echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode >
-      #     credentials/android/release.keystore
+      - name: Setup Android Keystore
+        run: >
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode >
+          credentials/android/release.keystore
 
-      # - name: Setup Google Play Service Key
-      #   run: |
-      #     echo "${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}" | base64 --decode > credentials/android/google-play-service-key.json
+      - name: Setup Google Play Service Key
+        run: |
+          echo "${{ secrets.GOOGLE_PLAY_SERVICE_KEY }}" | base64 --decode > credentials/android/google-play-service-key.json
 
-      # - name: Setup Google Services JSON for Android
-      #   run: >
-      #     echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode >
-      #     google-services.json
+      - name: Setup Google Services JSON for Android
+        run: >
+          echo "${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}" | base64 --decode >
+          google-services.json
 
-      # - name: Expo Prebuild for Android
-      #   run: npm run prebuild -- --platform android --clean
+      - name: Expo Prebuild for Android
+        run: npm run prebuild -- --platform android --clean
 
-      # - name: Build and Release Android
-      #   run: fastlane android qa_release
-      #   env:
-      #     ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      #     ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      #     ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Build and Release Android
+        run: fastlane android qa_release
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      # - name: Upload Android Release AAB
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: android-release-aab
-      #     path: android/app/build/outputs/bundle/release/app-release.aab
-      #     retention-days: 30
+      - name: Upload Android Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
 
       - name: Setup Apple API Key
         run: |
-          echo "🔐 Setting up Apple API Key..."
           base64_content=$(echo "$APP_STORE_CONNECT_API_KEY_BASE64" | \
             sed 's/-----BEGIN PRIVATE KEY-----//g' | \
             sed 's/-----END PRIVATE KEY-----//g' | \
@@ -88,141 +87,22 @@ jobs:
           echo "-----BEGIN PRIVATE KEY-----" > credentials/ios/AuthKey.p8
           echo "$base64_content" | fold -w 64 >> credentials/ios/AuthKey.p8
           echo "-----END PRIVATE KEY-----" >> credentials/ios/AuthKey.p8
-          
-          echo "✅ Apple API Key created successfully"
-          ls -lh credentials/ios/AuthKey.p8
         env:
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
 
       - name: Setup Google Service Info Plist for iOS
-        run: |
-          echo "📱 Setting up Google Service Info Plist..."
-          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode > GoogleService-Info.plist
-          echo "✅ GoogleService-Info.plist created"
-          ls -lh GoogleService-Info.plist
+        run: >
+          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}" | base64 --decode >
+          GoogleService-Info.plist
 
       - name: Expo Prebuild for iOS
-        run: |
-          echo "🔨 Starting Expo prebuild for iOS..."
-          echo "Node version: $(node --version)"
-          echo "NPM version: $(npm --version)"
-          echo ""
-          npm run prebuild -- --platform ios --clean
-          echo ""
-          echo "✅ Prebuild completed"
-          echo "Checking generated iOS directory..."
-          ls -la ios/
+        run: npm run prebuild -- --platform ios --clean
 
       - name: Install CocoaPods dependencies
         run: |
-          echo "📦 Installing CocoaPods dependencies..."
-          echo "CocoaPods version: $(pod --version)"
-          echo "Ruby version: $(ruby --version)"
-          
-          # Clean up any existing Pods and build artifacts
-          echo "🧹 Cleaning up previous build artifacts..."
           cd ios
-          rm -rf Pods/ Podfile.lock build/ smbmobile.xcworkspace/
+          pod install
           cd ..
-          
-          # Install pods with repo update
-          echo "🔄 Installing pods with --repo-update..."
-          cd ios
-          pod install --repo-update --verbose
-          cd ..
-          
-          echo ""
-          echo "🔍 Checking if ios directory exists..."
-          if [ ! -d "ios" ]; then
-            echo "❌ ERROR: ios directory does not exist!"
-            echo "Current directory: $(pwd)"
-            echo "Directory contents:"
-            ls -la
-            exit 1
-          fi
-          
-          cd ios
-          echo "📝 Current directory: $(pwd)"
-          echo "📝 iOS directory contents:"
-          ls -la
-          echo ""
-          
-          echo "📝 Checking Podfile..."
-          if [ ! -f "Podfile" ]; then
-            echo "❌ ERROR: Podfile not found!"
-            exit 1
-          fi
-          cat Podfile
-          echo ""
-          
-          echo "🔍 Checking if Podfile has post_install hook..."
-          if grep -q "post_install do |installer|" Podfile; then
-            echo "✅ post_install hook found in Podfile"
-            echo ""
-            echo "📝 Post-install section:"
-            grep -A 30 "post_install do |installer|" Podfile || echo "Could not extract post_install"
-          else
-            echo "❌ WARNING: post_install hook NOT found in Podfile!"
-            echo "The plugin may not have run correctly."
-          fi
-          echo ""
-          
-          echo "🔄 Running pod install..."
-          pod install --verbose
-          echo ""
-          echo "✅ Pod install completed"
-          
-          echo ""
-          echo "📂 Checking generated files..."
-          echo "Pods directory:"
-          ls -la Pods/ | head -n 20
-          echo ""
-          echo "Checking for workspace..."
-          if [ -d "smbmobile.xcworkspace" ]; then
-            echo "✅ Workspace created: smbmobile.xcworkspace"
-            ls -la smbmobile.xcworkspace/
-          else
-            echo "❌ ERROR: Workspace not created by pod install!"
-          fi
-          
-          echo ""
-          echo "Checking for project..."
-          if [ -d "smbmobile.xcodeproj" ]; then
-            echo "✅ Project exists: smbmobile.xcodeproj"
-          else
-            echo "⚠️  WARNING: Project not found!"
-          fi
-
-      - name: Fix Xcode 16.1 Firebase Compatibility
-        working-directory: ios
-        run: |
-          echo "🔧 Fixing Xcode 16.1 non-modular header errors..."
-          echo ""
-          
-          echo "📝 Step 1: Modifying ALL xcconfig files in Pods..."
-          find Pods/Target\ Support\ Files -name "*.xcconfig" -type f | while read xcconfig_file; do
-            echo "Patching: $xcconfig_file"
-            # Append our fixes to every xcconfig file
-            cat >> "$xcconfig_file" << 'EOF'
-
-          // Xcode 16.1 Compatibility Fixes
-          CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES = NO
-          GCC_TREAT_WARNINGS_AS_ERRORS = NO
-          EOF
-          done
-          
-          echo ""
-          echo "✅ Modified all xcconfig files"
-          echo ""
-          
-          echo "📝 Step 2: Verifying xcconfig for RNFBApp..."
-          if [ -f "Pods/Target Support Files/RNFBApp/RNFBApp.release.xcconfig" ]; then
-            echo "RNFBApp Release xcconfig contents (last 10 lines):"
-            tail -10 "Pods/Target Support Files/RNFBApp/RNFBApp.release.xcconfig"
-          fi
-          
-          echo ""
-          echo "✅ Firebase compatibility fix applied!"
 
       - name: Setup SSH for Fastlane Match
         run: |
@@ -239,408 +119,52 @@ jobs:
         env:
           FASTLANE_MATCH_DEPLOY_KEY: ${{ secrets.FASTLANE_MATCH_DEPLOY_KEY }}
 
-      - name: Verify Match Repository Has Certificates
-        run: |
-          echo "🔍 Checking Match repository for certificates..."
-          
-          # Clone Match repo to temporary location
-          TEMP_DIR=$(mktemp -d)
-          cd "$TEMP_DIR"
-          
-          if git clone git@github.com:insighture/smb-mobile-fastlane.git match_repo 2>&1; then
-            echo "✅ Match repository cloned successfully"
-            cd match_repo
-            
-            echo ""
-            echo "=== Repository structure ==="
-            ls -la
-            
-            echo ""
-            echo "=== Checking for certificates ==="
-            if [ -d "certs/distribution" ]; then
-              echo "✅ certs/distribution directory exists"
-              ls -lh certs/distribution/
-              
-              CERT_COUNT=$(find certs/distribution -name "*.cer" -o -name "*.p12" | wc -l)
-              if [ "$CERT_COUNT" -gt 0 ]; then
-                echo "✅ Found $CERT_COUNT certificate file(s)"
-              else
-                echo "❌ ERROR: No .cer or .p12 files in certs/distribution/"
-                echo ""
-                echo "TO FIX: Run 'fastlane match appstore' to generate certificates"
-                exit 1
-              fi
-            else
-              echo "❌ ERROR: certs/distribution directory does not exist"
-              echo ""
-              echo "Match repository structure:"
-              find . -type d -maxdepth 3
-              echo ""
-              echo "TO FIX: Run 'fastlane match appstore' to generate certificates"
-              exit 1
-            fi
-            
-            echo ""
-            echo "=== Checking for provisioning profiles ==="
-            if [ -d "profiles/appstore" ]; then
-              echo "✅ profiles/appstore directory exists"
-              ls -lh profiles/appstore/
-              
-              PROFILE_COUNT=$(find profiles/appstore -name "*.mobileprovision" | wc -l)
-              if [ "$PROFILE_COUNT" -gt 0 ]; then
-                echo "✅ Found $PROFILE_COUNT provisioning profile(s)"
-              else
-                echo "❌ ERROR: No .mobileprovision files in profiles/appstore/"
-                echo ""
-                echo "TO FIX: Run 'fastlane match appstore' to generate profiles"
-                exit 1
-              fi
-            else
-              echo "❌ ERROR: profiles/appstore directory does not exist"
-              echo ""
-              echo "TO FIX: Run 'fastlane match appstore' to generate profiles"
-              exit 1
-            fi
-            
-            echo ""
-            echo "✅ Match repository has all required files!"
-            
-          else
-            echo "❌ ERROR: Could not clone Match repository"
-            echo ""
-            echo "Possible causes:"
-            echo "1. SSH key doesn't have access to repository"
-            echo "2. Repository doesn't exist"
-            echo "3. Git URL is incorrect"
-            exit 1
-          fi
-          
-          # Cleanup
-          cd ~
-          rm -rf "$TEMP_DIR"
-
       - name: Setup Xcode 16.1
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '16.1'
 
-      - name: Verify Firebase Configuration
-        run: |
-          echo "🔍 Verifying Firebase configuration..."
-          if [ ! -f "./ios/GoogleService-Info.plist" ]; then
-            echo "❌ GoogleService-Info.plist is missing from the ios folder"
-            echo "Trying to copy from root directory..."
-            if [ -f "./GoogleService-Info.plist" ]; then
-              cp ./GoogleService-Info.plist ./ios/
-              echo "✅ Copied GoogleService-Info.plist to ios directory"
-            else
-              echo "❌ GoogleService-Info.plist not found in root directory either"
-              exit 1
-            fi
-          else
-            echo "✅ GoogleService-Info.plist found in ios directory"
-          fi
-          
-          # Verify Firebase modules are installed
-          if [ ! -d "./node_modules/@react-native-firebase" ]; then
-            echo "❌ React Native Firebase modules not found. Installing..."
-            npm install @react-native-firebase/app @react-native-firebase/messaging
-          else
-            echo "✅ React Native Firebase modules are installed"
-          fi
-
-      - name: Clean Build Folder
-        run: |
-          echo "🧹 Cleaning build folder..."
-          cd ios
-          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile
-          rm -rf build/ DerivedData/
-          cd ..
-          echo "✅ Build folder cleaned"
-
       - name: Setup Xcode First Launch and Install iOS 18.1 Runtime
         run: |
-          echo "=== Starting Xcode first launch and iOS 18.1 platform download ==="
           sudo xcodebuild -runFirstLaunch
           sudo xcodebuild -license accept || echo "License already accepted"
-          
-          echo ""
-          echo "=== Current iOS runtimes BEFORE download ==="
           xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
-          
-          echo ""
-          echo "=== Initiating iOS platform download ==="
           sudo xcodebuild -downloadPlatform iOS &
           DOWNLOAD_PID=$!
-          echo "Download started with PID: $DOWNLOAD_PID"
-          
-          # Wait for download process to complete
           wait $DOWNLOAD_PID || echo "Download process finished"
-          
-          # Give additional time for installation to settle
-          echo "Waiting 30 seconds for installation to complete..."
           sleep 30
-          
-          echo ""
-          echo "=== iOS runtimes AFTER download ==="
           xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
-          
-          echo ""
-          echo "=== Available SDKs ==="
-          xcodebuild -showsdks
-          
-          echo ""
-          echo "=== Final verification ==="
-          if xcodebuild -showsdks | grep -q "iphoneos18"; then
-            echo "✅ iOS 18.x SDK is installed and ready!"
-          elif xcodebuild -showsdks | grep -q "iphoneos"; then
-            echo "⚠️  iOS SDK found, but may not be 18.1. Continuing anyway..."
-          else
-            echo "❌ ERROR: No iOS SDK found!"
-            exit 1
-          fi
-          
-      - name: Verify iOS SDK Installation
-        run: |
-          xcodebuild -version
-          echo ""
-          echo "=== iOS SDK Path ==="
-          xcrun --sdk iphoneos --show-sdk-path
-          echo ""
-          echo "=== iOS SDK Version ==="
-          xcrun --sdk iphoneos --show-sdk-version
-          echo ""
-          echo "Build destination verification:"
-          xcodebuild -workspace ios/smbmobile.xcworkspace -scheme smbmobile -showdestinations || echo "Warning: Could not list destinations"
 
       - name: Create temporary keychain
         run: |
-          echo "🔑 Creating temporary keychain..."
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
           KEYCHAIN_NAME="build.keychain"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
           echo "KEYCHAIN_NAME=$KEYCHAIN_NAME" >> $GITHUB_ENV
           
-          echo "Deleting old keychain if exists..."
           security delete-keychain "$KEYCHAIN_NAME" 2>/dev/null || true
-          
-          echo "Creating new keychain: $KEYCHAIN_NAME"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
           
-          echo "Adding to keychain list..."
           EXISTING_KEYCHAINS=$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')
           security list-keychains -d user -s "$KEYCHAIN_NAME" $EXISTING_KEYCHAINS
-          
-          echo "Setting as default keychain..."
           security default-keychain -s "$KEYCHAIN_NAME"
-          
-          echo "Unlocking keychain..."
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
-          
-          echo "Configuring keychain settings..."
           security set-keychain-settings -t 3600 -u "$KEYCHAIN_NAME"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME" 2>/dev/null || true
-          
-          echo "✅ Keychain created and configured"
-          echo "Current keychains:"
-          security list-keychains
 
       - name: Unlock keychain
         run: |
-          echo "🔓 Unlocking keychain..."
           security unlock-keychain -p "${{ env.KEYCHAIN_PASSWORD }}" "${{ env.KEYCHAIN_NAME }}"
-          echo "✅ Keychain unlocked"
-          security show-keychain-info "${{ env.KEYCHAIN_NAME }}" || echo "Could not show keychain info"
-
-      - name: Verify Xcode Workspace
-        run: |
-          echo "🔍 Verifying Xcode workspace and project..."
-          cd ios
-          echo ""
-          echo "=== iOS directory contents ==="
-          ls -la
-          echo ""
-          echo "=== Checking workspace ==="
-          if [ -d "smbmobile.xcworkspace" ]; then
-            echo "✅ Workspace exists"
-            ls -la smbmobile.xcworkspace/
-          else
-            echo "❌ Workspace not found!"
-            exit 1
-          fi
-          
-          echo ""
-          echo "=== Checking project ==="
-          if [ -d "smbmobile.xcodeproj" ]; then
-            echo "✅ Project exists"
-            ls -la smbmobile.xcodeproj/
-          else
-            echo "❌ Project not found!"
-          fi
-          
-          echo ""
-          echo "=== Available schemes ==="
-          xcodebuild -workspace smbmobile.xcworkspace -list
-          
-          echo ""
-          echo "=== Checking build settings ==="
-          xcodebuild -workspace smbmobile.xcworkspace -scheme smbmobile -showBuildSettings | grep -E "(PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGN|DEVELOPMENT_TEAM|PROVISIONING_PROFILE)" || echo "Could not retrieve build settings"
-          cd ..
 
       - name: Clean Xcode build cache
         run: |
-          echo "🧹 Cleaning Xcode build cache..."
-          echo "Removing DerivedData..."
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
-          echo "✅ DerivedData cleaned"
-          
-          echo ""
-          echo "🔍 Verifying workspace before clean..."
-          if [ -d "ios/smbmobile.xcworkspace" ]; then
-            echo "✅ Workspace exists before clean"
-            echo "Cleaning Xcode workspace..."
-            cd ios
-            xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile || echo "⚠️  Clean failed, continuing anyway"
-            echo "✅ Xcode clean completed"
-            cd ..
-          else
-            echo "⚠️  WARNING: Workspace not found, skipping xcodebuild clean"
-            echo "Expected location: ios/smbmobile.xcworkspace"
-            echo "Current directory: $(pwd)"
-            echo "ios/ directory contents:"
-            ls -la ios/
-          fi
-      
-      - name: Final Verification Before Build
-        run: |
-          echo "🔍 ============================================="
-          echo "🔍 Final verification before Fastlane build"
-          echo "🔍 ============================================="
-          echo ""
-          echo "📍 Current directory: $(pwd)"
-          echo "📁 Project root contents:"
-          ls -la
-          echo ""
-          echo "📁 iOS directory contents:"
-          ls -la ios/
-          echo ""
-          echo "✅ Checking critical files..."
-          
-          if [ -d "ios/smbmobile.xcworkspace" ]; then
-            echo "✅ Workspace: ios/smbmobile.xcworkspace EXISTS"
-            ls -la ios/smbmobile.xcworkspace/
-          else
-            echo "❌ Workspace: ios/smbmobile.xcworkspace MISSING"
-          fi
-          
-          if [ -d "ios/smbmobile.xcodeproj" ]; then
-            echo "✅ Project: ios/smbmobile.xcodeproj EXISTS"
-          else
-            echo "❌ Project: ios/smbmobile.xcodeproj MISSING"
-          fi
-          
-          if [ -f "ios/Podfile" ]; then
-            echo "✅ Podfile: EXISTS"
-          else
-            echo "❌ Podfile: MISSING"
-          fi
-          
-          if [ -d "ios/Pods" ]; then
-            echo "✅ Pods directory: EXISTS ($(ls -1 ios/Pods | wc -l) items)"
-          else
-            echo "❌ Pods directory: MISSING"
-          fi
-          
-          echo ""
-          echo "🔍 Ready to run Fastlane..."
-          echo "============================================="
-
-      - name: Verify Code Signing Setup
-        run: |
-          echo "🔐 ============================================="
-          echo "🔐 Verifying Code Signing Configuration"
-          echo "🔐 ============================================="
-          
-          echo ""
-          echo "=== Certificates in Keychain ==="
-          security find-identity -v -p codesigning "${{ env.KEYCHAIN_NAME }}" || echo "⚠️  No certificates found in keychain"
-          
-          echo ""
-          echo "=== Provisioning Profiles Directory ==="
-          if [ -d ~/Library/MobileDevice/Provisioning\ Profiles/ ]; then
-            echo "✅ Profiles directory exists"
-            echo "Number of profiles: $(ls -1 ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null | wc -l)"
-            echo ""
-            echo "Profile files:"
-            ls -lh ~/Library/MobileDevice/Provisioning\ Profiles/
-          else
-            echo "❌ Provisioning Profiles directory does not exist"
-            mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
-            echo "✅ Created Provisioning Profiles directory"
-          fi
-          
-          echo ""
-          echo "=== Checking for App-Specific Profile ==="
-          if ls ~/Library/MobileDevice/Provisioning\ Profiles/*com.insighture.smbmobile*.mobileprovision 2>/dev/null; then
-            echo "✅ Profile for com.insighture.smbmobile found!"
-            PROFILE=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*com.insighture.smbmobile*.mobileprovision 2>/dev/null | head -n 1)
-            echo ""
-            echo "Profile details:"
-            security cms -D -i "$PROFILE" | grep -A 5 "TeamIdentifier\|Name\|UUID\|ExpirationDate" || echo "Could not extract profile details"
-          else
-            echo "❌ WARNING: Profile for com.insighture.smbmobile NOT found!"
-            echo "This may cause build failures. Check that Fastlane Match ran successfully."
-          fi
-          
-          echo ""
-          echo "=== Xcode Project Code Signing Settings ==="
           cd ios
-          xcodebuild -workspace smbmobile.xcworkspace -scheme smbmobile -configuration Release -showBuildSettings | grep -E "(CODE_SIGN|DEVELOPMENT_TEAM|PROVISIONING_PROFILE)" || echo "Could not retrieve build settings"
+          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile
           cd ..
-          
-          echo ""
-          echo "============================================="
 
       - name: Build and Release iOS
-        run: |
-          set -o pipefail
-          echo "🚀 ============================================="
-          echo "🚀 Starting iOS build and release process"
-          echo "🚀 ============================================="
-          echo ""
-          echo "📋 Build Environment Information:"
-          echo "  - Xcode version: $(xcodebuild -version | head -n 1)"
-          echo "  - Xcode path: $(xcode-select -p)"
-          echo "  - iOS SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
-          echo "  - iOS SDK path: $(xcrun --sdk iphoneos --show-sdk-path)"
-          echo "  - macOS version: $(sw_vers -productVersion)"
-          echo "  - Ruby version: $(ruby --version)"
-          echo "  - Fastlane version: $(fastlane --version | head -n 1)"
-          echo ""
-          echo "🔐 Code Signing Information:"
-          echo "  - Default keychain: $(security default-keychain)"
-          echo "  - Keychains: $(security list-keychains)"
-          echo ""
-          echo "📝 Environment Variables:"
-          echo "  - KEYCHAIN_NAME: $KEYCHAIN_NAME"
-          echo "  - APP_STORE_CONNECT_API_KEY_ID: ${APP_STORE_CONNECT_API_KEY_ID:0:10}..."
-          echo "  - APP_STORE_CONNECT_ISSUER_ID: ${APP_STORE_CONNECT_ISSUER_ID:0:10}..."
-          echo ""
-          echo "🏗️  Starting Fastlane build..."
-          echo "============================================="
-          echo ""
-          
-          fastlane ios qa_release 2>&1 | tee build_output.log
-          
-          BUILD_EXIT_CODE=${PIPESTATUS[0]}
-          echo ""
-          echo "============================================="
-          echo "🏁 Fastlane process completed with exit code: $BUILD_EXIT_CODE"
-          echo "============================================="
-          
-          exit $BUILD_EXIT_CODE
-        continue-on-error: true
-        id: ios_build
+        run: fastlane ios qa_release
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -649,149 +173,12 @@ jobs:
           KEYCHAIN_NAME: ${{ env.KEYCHAIN_NAME }}
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 60
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 6
-          FASTLANE_HIDE_GITHUB_ISSUES: 1
-          FASTLANE_SKIP_UPDATE_CHECK: 1
-          FASTLANE_XCODE_LIST_TIMEOUT: 60
-          DEBUG: 1
-
-      - name: Extract and Display Build Errors
-        if: steps.ios_build.outcome == 'failure'
-        run: |
-          echo "❌ ============================================="
-          echo "❌ BUILD FAILED - Extracting Error Information"
-          echo "❌ ============================================="
-          echo ""
-          
-          echo "📊 Build output file size: $(wc -l < build_output.log) lines"
-          echo ""
-          
-          # Extract various error patterns
-          echo "🔍 === COMPILATION ERRORS ==="
-          if grep -E "error:" build_output.log > /tmp/compilation_errors.txt 2>/dev/null; then
-            echo "Found $(wc -l < /tmp/compilation_errors.txt) error lines:"
-            head -n 50 /tmp/compilation_errors.txt
-          else
-            echo "❌ No compilation errors with 'error:' pattern found"
-          fi
-          
-          echo ""
-          echo "🔗 === LINKER ERRORS ==="
-          if grep -E "(ld: |Undefined symbol|duplicate symbol|symbol not found)" build_output.log > /tmp/linker_errors.txt 2>/dev/null; then
-            echo "Found $(wc -l < /tmp/linker_errors.txt) linker error lines:"
-            head -n 50 /tmp/linker_errors.txt
-          else
-            echo "No linker errors found"
-          fi
-          
-          echo ""
-          echo "📦 === MODULE/FRAMEWORK ERRORS ==="
-          if grep -iE "(No such module|framework not found|could not build module|module.*not found)" build_output.log > /tmp/module_errors.txt 2>/dev/null; then
-            echo "Found $(wc -l < /tmp/module_errors.txt) module error lines:"
-            head -n 50 /tmp/module_errors.txt
-          else
-            echo "No module/framework errors found"
-          fi
-          
-          echo ""
-          echo "⚠️  === WARNINGS ==="
-          grep -iE "warning:" build_output.log | head -n 20 || echo "No warnings found"
-          
-          echo ""
-          echo "💥 === FAILED COMMANDS ==="
-          if grep -B 5 -E "(\*\* BUILD FAILED \*\*|Command.*failed|The following build commands failed)" build_output.log > /tmp/failed_commands.txt 2>/dev/null; then
-            echo "Found failed commands:"
-            head -n 100 /tmp/failed_commands.txt
-          else
-            echo "No failed command patterns found"
-          fi
-          
-          echo ""
-          echo "📝 === ERROR CONTEXT (10 lines before and after each error) ==="
-          grep -B 10 -A 10 "error:" build_output.log | head -n 300 || echo "No detailed error context found"
-          
-          echo ""
-          echo "🔎 === SEARCHING FOR SPECIFIC ERROR PATTERNS ==="
-          echo "Checking for common issues..."
-          grep -iE "(PrecompileModule|clang.*failed|swift.*failed|exit code 1)" build_output.log | head -n 30 || echo "No common error patterns found"
-          
-          echo ""
-          echo "📄 === LAST 200 LINES OF BUILD OUTPUT ==="
-          tail -n 200 build_output.log
-          
-          echo ""
-          echo "📂 === CHECKING FOR FASTLANE LOGS ==="
-          if [ -d "fastlane/logs" ]; then
-            echo "Fastlane logs directory exists:"
-            ls -lh fastlane/logs/
-            echo ""
-            
-            # Find the most recent log file
-            LATEST_LOG=$(find fastlane/logs -type f -name "*.log" -print0 | xargs -0 ls -t | head -n 1)
-            if [ -n "$LATEST_LOG" ]; then
-              echo "=== Latest Fastlane log: $LATEST_LOG ==="
-              echo "File size: $(wc -l < "$LATEST_LOG") lines"
-              echo ""
-              echo "Errors from Fastlane log:"
-              grep -B 10 -A 10 "error:" "$LATEST_LOG" | head -n 300 || echo "No errors in fastlane log"
-              echo ""
-              echo "Last 100 lines of Fastlane log:"
-              tail -n 100 "$LATEST_LOG"
-            fi
-          else
-            echo "❌ Fastlane logs directory not found"
-          fi
-          
-          echo ""
-          echo "🔍 === CHECKING XCODE BUILD LOGS ==="
-          if [ -d "$HOME/Library/Logs/gym" ]; then
-            echo "Gym logs found:"
-            ls -lht "$HOME/Library/Logs/gym" | head -n 10
-            LATEST_GYM_LOG=$(find "$HOME/Library/Logs/gym" -type f -name "*.log" -print0 | xargs -0 ls -t | head -n 1)
-            if [ -n "$LATEST_GYM_LOG" ]; then
-              echo ""
-              echo "Latest gym log: $LATEST_GYM_LOG"
-              echo "Last 100 lines:"
-              tail -n 100 "$LATEST_GYM_LOG"
-            fi
-          fi
-          
-          echo ""
-          echo "📊 === BUILD FAILURE SUMMARY ==="
-          echo "Total 'error:' occurrences: $(grep -c "error:" build_output.log || echo 0)"
-          echo "Total 'warning:' occurrences: $(grep -c "warning:" build_output.log || echo 0)"
-          echo "Total 'failed' occurrences: $(grep -ic "failed" build_output.log || echo 0)"
-          echo ""
-          echo "============================================="
-          echo "Full build logs saved to artifacts for download"
-          echo "Download 'ios-full-build-output' and 'ios-build-logs' artifacts"
-          echo "============================================="
-          
-          exit 1
-
-      - name: Upload Full Build Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-full-build-output
-          path: build_output.log
-          retention-days: 7
 
       - name: Cleanup keychain
         if: always()
         run: |
           security delete-keychain "${{ env.KEYCHAIN_NAME }}" 2>/dev/null || true
 
-      - name: Upload Build Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build-logs
-          path: |
-            build_output.log
-            fastlane/logs/**/*.log
-            ~/Library/Logs/gym/**/*.log
-          retention-days: 7
-          if-no-files-found: ignore
 
       - name: Upload iOS Release IPA
         uses: actions/upload-artifact@v4
