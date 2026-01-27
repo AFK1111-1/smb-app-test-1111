@@ -25,13 +25,8 @@ const withPodfileModifications: ConfigPlugin = (config) => {
       let contents = fs.readFileSync(podfilePath, 'utf-8');
 
       // 1. Switch to Static Frameworks (Xcode 16.1 compatible)
-      if (!contents.includes('use_frameworks! :linkage => :static')) {
-        // Remove the old static library variable if it exists
-        contents = contents.replace('$RNFirebaseAsStaticFramework = true\n', '');
-        
-        // Inject use_frameworks! :linkage => :static at the top
-        contents = 'use_frameworks! :linkage => :static\n' + contents;
-      }
+      // NOTE: We rely on expo-build-properties to set use_frameworks! :linkage => :static
+      // Removing manual injection to avoid duplicates.
 
       // 2. The Ruby logic for post_install
       const rubyLogic = `
@@ -67,7 +62,7 @@ const withPodfileModifications: ConfigPlugin = (config) => {
           # Explicitly add header search paths for Firebase headers
           search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
           search_paths = [search_paths] if search_paths.is_a?(String)
-          ['"$(PODS_ROOT)/Headers/Public/FirebaseCore"', '"$(PODS_ROOT)/Headers/Public/FirebaseMessaging"', '"$(PODS_ROOT)/Headers/Public/FirebaseInstallations"'].each do |path|
+          ['$(PODS_ROOT)/Headers/Public/FirebaseCore', '$(PODS_ROOT)/Headers/Public/FirebaseMessaging', '$(PODS_ROOT)/Headers/Public/FirebaseInstallations'].each do |path|
             search_paths << path unless search_paths.include?(path)
           end
           config.build_settings['HEADER_SEARCH_PATHS'] = search_paths
