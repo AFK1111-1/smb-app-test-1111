@@ -3,9 +3,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * DEFINITIVE FIX FOR XCODE 16.1 + FIREBASE
- * Strategy: MERGE logic into existing post_install hook if present, 
- * or create one if not. This avoids the "Multiple post_install hooks" error.
+ * DEFINITIVE FIX FOR XCODE 16.1 + FIREBASE (v3)
+ * Strategy:
+ * 1. Remove ALL modular_headers hacks (as per maintainer Mike Hardy's advice).
+ * 2. Rely on CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES.
+ * 3. Specific fix for BoringSSL-GRPC (disable headermaps).
+ * 4. Force SWIFT_VERSION=5.0 and disable module debugging/explicit modules.
  */
 const withPodfileModifications: ConfigPlugin = (config) => {
   return withDangerousMod(config, [
@@ -20,42 +23,38 @@ const withPodfileModifications: ConfigPlugin = (config) => {
 
       let contents = fs.readFileSync(podfilePath, 'utf-8');
 
-      // 1. Add global flags if missing
-      const globalFlags = [
-        "$RNFirebaseAsStaticFramework = true",
-        "use_modular_headers!"
-      ];
-      
-      globalFlags.forEach(flag => {
-        if (!contents.includes(flag)) {
-          contents = flag + "\n" + contents;
-        }
-      });
+      // 1. Ensure Firebase static framework flag
+      if (!contents.includes('$RNFirebaseAsStaticFramework = true')) {
+        contents = '$RNFirebaseAsStaticFramework = true\n' + contents;
+      }
 
-      // 2. The Ruby code to inject
+      // 2. The Ruby logic for post_install
       const rubyLogic = `
-    # --- START XCODE 16 COMPATIBILITY FIX ---
+    # --- START XCODE 16 DEFINITIVE FIX ---
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         next if config.build_settings.nil?
         
-        # Deployment target fix
+        # Deployment target
         deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
         if deployment_target && deployment_target.to_f < 15.1
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         end
 
-        # Xcode 16.1 Modularity and Module settings
+        # Xcode 16.1 definitive compatibility
         config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
         config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
         config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
-        config.build_settings['CLANG_ENABLE_COMMON_MODULE_CACHE'] = 'NO'
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
         config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
         config.build_settings['DEFINES_MODULE'] = 'YES'
-        config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
         config.build_settings['SWIFT_VERSION'] = '5.0'
+
+        # BoringSSL-GRPC specific fix for Xcode 16
+        if target.name == 'BoringSSL-GRPC'
+          config.build_settings['USE_HEADERMAP'] = 'NO'
+        end
         
         # OTHER_CFLAGS safe append
         cflags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
@@ -74,36 +73,28 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
       end
     end
-    
-    installer.pods_project.build_configurations.each do |config|
-      next if config.build_settings.nil?
-      config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
-      config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
-      config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
-      config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
-      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
-      config.build_settings['SWIFT_VERSION'] = '5.0'
-    end
-    # --- END XCODE 16 COMPATIBILITY FIX ---
+    # --- END XCODE 16 DEFINITIVE FIX ---
 `;
 
-      // 3. Merging logic
-      if (contents.includes('XCODE 16 COMPATIBILITY FIX')) {
+      // 3. Merging logic for post_install
+      if (contents.includes('XCODE 16 DEFINITIVE FIX')) {
         // Already patched
       } else if (contents.includes('post_install do |installer|')) {
-        // Merge into existing post_install
-        console.log('✅ Merging XCODE 16 fix into existing post_install');
+        console.log('✅ Merging XCODE 16 definitive fix into existing post_install');
         contents = contents.replace(
           /post_install do \|installer\|/,
           'post_install do |installer|' + rubyLogic
         );
       } else {
-        // Create new post_install
-        console.log('✅ Creating new post_install for XCODE 16 fix');
+        console.log('✅ Creating new post_install for XCODE 16 definitive fix');
         const fullHook = '\npost_install do |installer|' + rubyLogic + '\nend\n';
         contents = contents.replace(/end\s*$/, fullHook + '\nend');
       }
+
+      // 4. CLEANUP: Remove any previous modular_headers hacks or global directives
+      contents = contents.replace(/# --- START FIREBASE SURGICAL MODULARITY ---[\s\S]*?# --- END FIREBASE SURGICAL MODULARITY ---/g, '');
+      contents = contents.replace(/use_modular_headers!\n/g, '');
+      contents = contents.replace(/XCODE 16 SURGICAL FIX/g, 'XCODE 16 DEFINITIVE FIX'); // Migrating marker if it exists
 
       fs.writeFileSync(podfilePath, contents);
       return config;

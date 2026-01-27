@@ -12,10 +12,10 @@ PrecompileModule failure for RNFBApp and other modules when building with Xcode 
 - Disables explicit modules (`CLANG_ENABLE_EXPLICIT_MODULES=NO`)
 - Sets Swift compilation mode to `wholemodule`
 - Disables module debugging
-- Allows non-modular includes in framework modules (`CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`)
 - Injects `$RNFirebaseAsStaticFramework = true` into Podfile
-- Enables `use_modular_headers!` globally to fix module map generation for Firebase
-- **Definitive Fix**: Merges all settings into a single `post_install` hook to avoid "Multiple post_install hooks" errors.
+- **Definitive Fix**: Rely on pure build settings (`CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`) instead of `modular_headers` to avoid native module linking issues.
+- **BoringSSL Fix**: Disables `USE_HEADERMAP` for `BoringSSL-GRPC` to resolve Xcode 16.1 linker issues.
+- **Robust Merging**: Merges all settings into a single `post_install` hook to avoid "Multiple post_install hooks" errors.
 - **Aggressive Fixes**: Disables `CLANG_ENABLE_MODULE_DEBUGGING`, `SWIFT_ENABLE_EXPLICIT_MODULES`, and sets `SWIFT_VERSION=5.0`.
 - Disables treating modularity warnings as errors with `-Wno-error=non-modular-include-in-framework-module`
 
