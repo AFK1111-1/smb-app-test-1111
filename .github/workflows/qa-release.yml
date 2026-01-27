@@ -3,6 +3,10 @@ name: QA Release Build
 on:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qa-build:
     runs-on: macos-15
@@ -16,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
@@ -27,11 +31,6 @@ jobs:
         with:
           ruby-version: '3.2'
           bundler-cache: true
-
-      - name: Install Fastlane
-        run: |
-          gem install fastlane
-          bundle install
 
       - name: Setup environment variables
         run: |
@@ -101,7 +100,7 @@ jobs:
       - name: Install CocoaPods dependencies
         run: |
           cd ios
-          pod install
+          bundle exec pod install
           cd ..
 
       - name: Setup SSH for Fastlane Match
@@ -124,16 +123,11 @@ jobs:
         with:
           xcode-version: '16.1'
 
-      - name: Setup Xcode First Launch and Install iOS 18.1 Runtime
+      - name: Verify Xcode and iOS SDK
         run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcodebuild -license accept || echo "License already accepted"
-          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
-          sudo xcodebuild -downloadPlatform iOS &
-          DOWNLOAD_PID=$!
-          wait $DOWNLOAD_PID || echo "Download process finished"
-          sleep 30
-          xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+          xcrun simctl list runtimes
 
       - name: Create temporary keychain
         run: |
@@ -164,7 +158,7 @@ jobs:
           cd ..
 
       - name: Build and Release iOS
-        run: fastlane ios qa_release
+        run: bundle exec fastlane ios qa_release
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -188,7 +182,7 @@ jobs:
           retention-days: 30
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           body: |
             ## QA Release v${{ github.run_number }}
@@ -201,8 +195,11 @@ jobs:
             - **Build Number**: ${{ github.run_number }}
             - **Xcode**: 16.1 with iOS 18.1 runtime
             ### 🚀 Deployment
-            - Android: Internal track on Google Play
-            - iOS: TestFlight
+            - **Android**: Internal track on Google Play
+            - **iOS**: TestFlight
+            ### ⚠️ Action Required
+            - **Age Ratings**: Apple requires updated age rating responses by January 31, 2026. Please verify in App Store Connect.
+            - **Privacy Manifest**: This build includes the required Privacy Manifest entries.
           draft: false
           tag_name: qa-v${{ github.run_number }}
           prerelease: true
