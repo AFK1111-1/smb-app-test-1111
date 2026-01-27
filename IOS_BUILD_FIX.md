@@ -12,6 +12,7 @@ PrecompileModule failure for RNFBApp and other modules when building with Xcode 
 - Disables explicit modules (`CLANG_ENABLE_EXPLICIT_MODULES=NO`)
 - Sets Swift compilation mode to `wholemodule`
 - Disables module debugging
+- Allows non-modular includes in framework modules (`CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`)
 
 ### 2. ✅ Updated app.config.ts
 - Disabled module precompilation with `enableModulePrecompilation: false`
@@ -21,6 +22,7 @@ PrecompileModule failure for RNFBApp and other modules when building with Xcode 
 Added proper Xcode build settings to xcargs:
 - `CLANG_ENABLE_MODULE_VERIFIER=NO`
 - `CLANG_ENABLE_EXPLICIT_MODULES=NO`
+- `CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`
 
 ### 4. ✅ Added Build Cache Cleanup in CI/CD
 Added step in `qa-release.yml` to clean derived data and run `xcodebuild clean` before building.

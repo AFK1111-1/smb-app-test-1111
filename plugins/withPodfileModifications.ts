@@ -46,6 +46,9 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         
         # Disable module debugging (can cause issues with precompilation)
         config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
+        
+        # Allow non-modular includes in framework modules - fixes Firebase build errors with use_frameworks!
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
       end
     end
 
@@ -53,6 +56,7 @@ const withPodfileModifications: ConfigPlugin = (config) => {
     installer.pods_project.build_configurations.each do |config|
       config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
     end
   end`;
 
@@ -61,8 +65,8 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         console.log('⚠️  post_install hook already exists in Podfile - skipping addition');
         
         // Check if our specific fixes are present
-        if (!contents.includes('CLANG_ENABLE_MODULE_VERIFIER')) {
-          console.log('⚠️  Adding module verifier settings to existing post_install');
+        if (!contents.includes('CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES')) {
+          console.log('⚠️  Adding module verifier and non-modular include settings to existing post_install');
           // Find the existing post_install block and add our settings
           const postInstallRegex = /(post_install do \|installer\|[\s\S]*?)(  end)/;
           const match = contents.match(postInstallRegex);
@@ -83,11 +87,13 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
         config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
         config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
       end
     end
     installer.pods_project.build_configurations.each do |config|
       config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
     end
 `;
             
