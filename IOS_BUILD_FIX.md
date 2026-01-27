@@ -16,6 +16,7 @@ PrecompileModule failure for RNFBApp and other modules when building with Xcode 
 - Injects `$RNFirebaseAsStaticFramework = true` into Podfile
 - Enables `use_modular_headers!` globally to fix module map generation for Firebase
 - **Definitive Fix**: Merges all settings into a single `post_install` hook to avoid "Multiple post_install hooks" errors.
+- **Aggressive Fixes**: Disables `CLANG_ENABLE_MODULE_DEBUGGING`, `SWIFT_ENABLE_EXPLICIT_MODULES`, and sets `SWIFT_VERSION=5.0`.
 - Disables treating modularity warnings as errors with `-Wno-error=non-modular-include-in-framework-module`
 
 ### 2. ✅ Updated app.config.ts
@@ -28,8 +29,11 @@ Added proper Xcode build settings to xcargs:
 - `CLANG_ENABLE_EXPLICIT_MODULES=NO`
 - `CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`
 - `DEFINES_MODULE=YES`
-- `GCC_PREPROCESSOR_DEFINITIONS='$(inherited) GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1'`
+- `GCC_PREPROCESSOR_DEFINITIONS='$(inherited) GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1 FIRMessaging_No_Symbols_Conflict=1 RNFB_MESSAGING_USE_STATIC_DYNAMIC_FRAMEWORK=1'`
 - `CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER=NO`
+- `SWIFT_ENABLE_EXPLICIT_MODULES=NO`
+- `CLANG_ENABLE_MODULE_DEBUGGING=NO`
+- `SWIFT_VERSION=5.0`
 
 ### 4. ✅ Added Build Cache Cleanup in CI/CD
 Added step in `qa-release.yml` to clean derived data and run `xcodebuild clean` before building.

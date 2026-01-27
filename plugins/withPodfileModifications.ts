@@ -45,12 +45,17 @@ const withPodfileModifications: ConfigPlugin = (config) => {
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         end
 
+        # Xcode 16.1 Modularity and Module settings
         config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+        config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+        config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
+        config.build_settings['CLANG_ENABLE_COMMON_MODULE_CACHE'] = 'NO'
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
         config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
         config.build_settings['DEFINES_MODULE'] = 'YES'
         config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
+        config.build_settings['SWIFT_VERSION'] = '5.0'
         
         # OTHER_CFLAGS safe append
         cflags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
@@ -63,7 +68,7 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         # GCC_PREPROCESSOR_DEFINITIONS safe append
         defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
         defs = [defs] if defs.is_a?(String)
-        ['GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1', 'FIRMessaging_No_Symbols_Conflict=1'].each do |val|
+        ['GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1', 'FIRMessaging_No_Symbols_Conflict=1', 'RNFB_MESSAGING_USE_STATIC_DYNAMIC_FRAMEWORK=1'].each do |val|
           defs << val unless defs.include?(val)
         end
         config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
@@ -73,8 +78,12 @@ const withPodfileModifications: ConfigPlugin = (config) => {
     installer.pods_project.build_configurations.each do |config|
       next if config.build_settings.nil?
       config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
+      config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
       config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+      config.build_settings['SWIFT_VERSION'] = '5.0'
     end
     # --- END XCODE 16 COMPATIBILITY FIX ---
 `;
@@ -87,17 +96,13 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         console.log('✅ Merging XCODE 16 fix into existing post_install');
         contents = contents.replace(
           /post_install do \|installer\|/,
-          `post_install do |installer|${rubyLogic}`
+          'post_install do |installer|' + rubyLogic
         );
       } else {
         // Create new post_install
         console.log('✅ Creating new post_install for XCODE 16 fix');
-        const fullHook = `
-post_install do |installer|${rubyLogic}
-end
-`;
-        // Insert before the last 'end' of the Podfile (common for React Native Podfiles)
-        contents = contents.replace(/end\s*$/, `${fullHook}\nend`);
+        const fullHook = '\npost_install do |installer|' + rubyLogic + '\nend\n';
+        contents = contents.replace(/end\s*$/, fullHook + '\nend');
       }
 
       fs.writeFileSync(podfilePath, contents);
