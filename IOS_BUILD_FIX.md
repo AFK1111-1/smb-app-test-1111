@@ -15,6 +15,7 @@ PrecompileModule failure for RNFBApp and other modules when building with Xcode 
 - Allows non-modular includes in framework modules (`CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`)
 - Injects `$RNFirebaseAsStaticFramework = true` into Podfile
 - Enables `use_modular_headers!` globally to fix module map generation for Firebase
+- **Definitive Fix**: Merges all settings into a single `post_install` hook to avoid "Multiple post_install hooks" errors.
 - Disables treating modularity warnings as errors with `-Wno-error=non-modular-include-in-framework-module`
 
 ### 2. ✅ Updated app.config.ts
