@@ -13,6 +13,8 @@ PrecompileModule failure for RNFBApp and other modules when building with Xcode 
 - Sets Swift compilation mode to `wholemodule`
 - Disables module debugging
 - Allows non-modular includes in framework modules (`CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`)
+- Injects `$RNFirebaseAsStaticFramework = true` into Podfile
+- Disables treating modularity warnings as errors with `-Wno-error=non-modular-include-in-framework-module`
 
 ### 2. ✅ Updated app.config.ts
 - Disabled module precompilation with `enableModulePrecompilation: false`
@@ -23,6 +25,8 @@ Added proper Xcode build settings to xcargs:
 - `CLANG_ENABLE_MODULE_VERIFIER=NO`
 - `CLANG_ENABLE_EXPLICIT_MODULES=NO`
 - `CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`
+- `DEFINES_MODULE=YES`
+- `GCC_PREPROCESSOR_DEFINITIONS='$(inherited) GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1'`
 
 ### 4. ✅ Added Build Cache Cleanup in CI/CD
 Added step in `qa-release.yml` to clean derived data and run `xcodebuild clean` before building.
