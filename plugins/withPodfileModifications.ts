@@ -3,10 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Config plugin to add post_install hooks to Podfile for:
- * 1. Fixing iOS deployment target to minimum 12.0
- * 2. Disabling module verification for Xcode 16.1 compatibility
- * 3. Setting Swift compilation mode
+ * Config plugin to fix iOS build issues for Xcode 16.1 and React Native Firebase
+ * This plugin performs the following:
+ * 1. Sets $RNFirebaseAsStaticFramework = true
+ * 2. Adds a pre_install hook for modular headers
+ * 3. Adds a comprehensive post_install hook for build settings
  */
 const withPodfileModifications: ConfigPlugin = (config) => {
   return withDangerousMod(config, [
@@ -24,88 +25,60 @@ const withPodfileModifications: ConfigPlugin = (config) => {
 
       let contents = fs.readFileSync(podfilePath, 'utf-8');
 
-      // Add global Firebase static framework flag at the very top
+      // 1. Ensure global Firebase static framework flag
       if (!contents.includes('$RNFirebaseAsStaticFramework = true')) {
         contents = '$RNFirebaseAsStaticFramework = true\n' + contents;
       }
 
-      // Post-install hook to fix Xcode 16.1 compatibility issues
-      const postInstallHook = `
-  post_install do |installer|
+      // 2. Add pre_install hook for modular headers if not present
+      const preInstallHook = `
+pre_install do |installer|
+  installer.pod_targets.each do |pod|
+    if pod.name.start_with?('RNFB') || pod.name.start_with?('React')
+      pod.use_modular_headers = true
+    end
+  end
+end
+`;
+      if (!contents.includes('pre_install do |installer|')) {
+        contents = contents.replace(/platform :ios/, preInstallHook + '\nplatform :ios');
+      }
+
+      // 3. Comprehensive post_install hook
+      const postInstallSettings = `
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-        # Fix deployment target - must be at least iOS 15.1 for Xcode 16.1
+        # Fix deployment target for Xcode 16.1
         deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
         if deployment_target && deployment_target.to_f < 15.1
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         end
 
-        # Disable module verification - fixes PrecompileModule errors in Xcode 16.1
+        # Xcode 16.1 Compatibility Flags
         config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
-        
-        # Disable explicit modules - alternative fix for module precompilation
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
-        
-        # Set Swift compilation mode to whole module for better compatibility
-        config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
-        
-        # Disable module debugging (can cause issues with precompilation)
-        config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
-        
-        # Allow non-modular includes in framework modules - fixes Firebase build errors with use_frameworks!
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+        config.build_settings['DEFINES_MODULE'] = 'YES'
+        config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
+        config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
         
         # Disable treating modularity warnings as errors
-        current_cflags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
-        config.build_settings['OTHER_CFLAGS'] = "#{current_cflags} -Wno-error=non-modular-include-in-framework-module"
-        
-        # Ensure modules are enabled but not verified strictly
-        config.build_settings['CLANG_ENABLE_MODULES'] = 'YES'
-        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-        config.build_settings['DEFINES_MODULE'] = 'YES'
-        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
-      end
-    end
-    installer.pods_project.build_configurations.each do |config|
-      config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
-      config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
-      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-      config.build_settings['DEFINES_MODULE'] = 'YES'
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
-    end
-  end`;
-
-      // Check if post_install already exists
-      if (contents.includes('post_install do |installer|')) {
-        console.log('⚠️  post_install hook already exists in Podfile - skipping addition');
-        
-        // Check if our specific fixes are present
-        if (!contents.includes('CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES')) {
-          console.log('⚠️  Adding module verifier and non-modular include settings to existing post_install');
-          // Find the existing post_install block and add our settings
-          const postInstallRegex = /(post_install do \|installer\|[\s\S]*?)(  end)/;
-          const match = contents.match(postInstallRegex);
-          
-          if (match) {
-            const existingContent = match[1];
-            const closingEnd = match[2];
-            
-            const additionalConfig = `
-    # Xcode 16.1 compatibility fixes
-    installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
-        if deployment_target && deployment_target.to_f < 15.1
-          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        current_cflags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
+        if current_cflags.is_a?(String)
+          config.build_settings['OTHER_CFLAGS'] = "#{current_cflags} -Wno-error=non-modular-include-in-framework-module"
+        else
+          config.build_settings['OTHER_CFLAGS'] << '-Wno-error=non-modular-include-in-framework-module'
         end
-        config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
-        config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
-        config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
-        config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
-        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-        config.build_settings['DEFINES_MODULE'] = 'YES'
+
+        # Firebase Specific fix for symbol conflicts and protobuf
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1'
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FIRMessaging_No_Symbols_Conflict=1'
       end
     end
+
+    # Project-level overrides
     installer.pods_project.build_configurations.each do |config|
       config.build_settings['CLANG_ENABLE_MODULE_VERIFIER'] = 'NO'
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
@@ -114,24 +87,25 @@ const withPodfileModifications: ConfigPlugin = (config) => {
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
     end
 `;
-            
-            contents = contents.replace(
-              postInstallRegex,
-              existingContent + additionalConfig + closingEnd
-            );
-            fs.writeFileSync(podfilePath, contents);
-            console.log('✅ Added Xcode 16.1 compatibility settings to existing post_install');
-          }
-        } else {
-          console.log('✅ Module verifier settings already present');
+
+      // If post_install already exists, inject our settings into it
+      if (contents.includes('post_install do |installer|')) {
+        if (!contents.includes('GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS')) {
+           const postInstallRegex = /(post_install do \|installer\|[\s\S]*?)(  end)/;
+           contents = contents.replace(postInstallRegex, `$1${postInstallSettings}$2`);
         }
       } else {
-        // Add new post_install hook before the final 'end'
-        console.log('✅ Adding new post_install hook to Podfile');
-        contents = contents.replace(/end\s*$/, postInstallHook + '\nend');
-        fs.writeFileSync(podfilePath, contents);
-        console.log('✅ Successfully added post_install hook');
+        // Create new post_install
+        const fullPostInstall = `
+post_install do |installer|
+  ${postInstallSettings}
+end
+`;
+        contents = contents.replace(/end\s*$/, fullPostInstall + '\nend');
       }
+
+      fs.writeFileSync(podfilePath, contents);
+      console.log('✅ Successfully applied Podfile modifications for Xcode 16.1');
 
       return config;
     },
@@ -139,4 +113,3 @@ const withPodfileModifications: ConfigPlugin = (config) => {
 };
 
 export default withPodfileModifications;
-
