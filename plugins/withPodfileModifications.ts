@@ -3,12 +3,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * DEFINITIVE FIX FOR XCODE 16.1 + FIREBASE (v3)
+ * DEFINITIVE FIX FOR XCODE 16.1 + FIREBASE (v6)
  * Strategy:
- * 1. Remove ALL modular_headers hacks (as per maintainer Mike Hardy's advice).
+ * 1. Remove ALL modular_headers hacks.
  * 2. Rely on CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES.
  * 3. Specific fix for BoringSSL-GRPC (disable headermaps).
  * 4. Force SWIFT_VERSION=5.0 and disable module debugging/explicit modules.
+ * 5. NEW: Inject HEADER_SEARCH_PATHS for RNFBMessaging to find Firebase headers.
  */
 const withPodfileModifications: ConfigPlugin = (config) => {
   return withDangerousMod(config, [
@@ -56,6 +57,17 @@ const withPodfileModifications: ConfigPlugin = (config) => {
           config.build_settings['USE_HEADERMAP'] = 'NO'
         end
         
+        # RNFBMessaging specific fix: explicit header search paths for static linking
+        if target.name == 'RNFBMessaging'
+          search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
+          search_paths = [search_paths] if search_paths.is_a?(String)
+          # Add public Firebase headers
+          ['"\\${PODS_ROOT}/Headers/Public/Firebase"', '"\\${PODS_ROOT}/Headers/Public/FirebaseCore"', '"\\${PODS_ROOT}/Headers/Public/FirebaseMessaging"'].each do |path|
+             search_paths << path unless search_paths.include?(path)
+          end
+          config.build_settings['HEADER_SEARCH_PATHS'] = search_paths
+        end
+
         # OTHER_CFLAGS safe append
         cflags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
         cflags = [cflags] if cflags.is_a?(String)
@@ -78,7 +90,14 @@ const withPodfileModifications: ConfigPlugin = (config) => {
 
       // 3. Merging logic for post_install
       if (contents.includes('XCODE 16 DEFINITIVE FIX')) {
-        // Already patched
+        // Already patched - we might need to update the logic if it's old, 
+        // but for now let's assume if the marker is there, the logic is managed by this tool.
+        // To be safe, let's replace the existing block.
+        console.log('✅ Updating existing XCODE 16 definitive fix');
+        contents = contents.replace(
+            /# --- START XCODE 16 DEFINITIVE FIX ---[\s\S]*?# --- END XCODE 16 DEFINITIVE FIX ---/,
+            rubyLogic.trim()
+        );
       } else if (contents.includes('post_install do |installer|')) {
         console.log('✅ Merging XCODE 16 definitive fix into existing post_install');
         contents = contents.replace(
@@ -90,11 +109,6 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         const fullHook = '\npost_install do |installer|' + rubyLogic + '\nend\n';
         contents = contents.replace(/end\s*$/, fullHook + '\nend');
       }
-
-      // 4. CLEANUP: Remove any previous modular_headers hacks or global directives
-      contents = contents.replace(/# --- START FIREBASE SURGICAL MODULARITY ---[\s\S]*?# --- END FIREBASE SURGICAL MODULARITY ---/g, '');
-      contents = contents.replace(/use_modular_headers!\n/g, '');
-      contents = contents.replace(/XCODE 16 SURGICAL FIX/g, 'XCODE 16 DEFINITIVE FIX'); // Migrating marker if it exists
 
       fs.writeFileSync(podfilePath, contents);
       return config;
