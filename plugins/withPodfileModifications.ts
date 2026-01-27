@@ -24,9 +24,13 @@ const withPodfileModifications: ConfigPlugin = (config) => {
 
       let contents = fs.readFileSync(podfilePath, 'utf-8');
 
-      // 1. Ensure Firebase static framework flag
-      if (!contents.includes('$RNFirebaseAsStaticFramework = true')) {
-        contents = '$RNFirebaseAsStaticFramework = true\n' + contents;
+      // 1. Switch to Static Frameworks (Xcode 16.1 compatible)
+      if (!contents.includes('use_frameworks! :linkage => :static')) {
+        // Remove the old static library variable if it exists
+        contents = contents.replace('$RNFirebaseAsStaticFramework = true\n', '');
+        
+        // Inject use_frameworks! :linkage => :static at the top
+        contents = 'use_frameworks! :linkage => :static\n' + contents;
       }
 
       // 2. The Ruby logic for post_install
@@ -55,11 +59,6 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         # BoringSSL-GRPC specific fix for Xcode 16
         if target.name == 'BoringSSL-GRPC'
           config.build_settings['USE_HEADERMAP'] = 'NO'
-        end
-        
-        # RNFBMessaging specific fix: Re-enable headermaps to find headers
-        if target.name == 'RNFBMessaging'
-          config.build_settings['USE_HEADERMAP'] = 'YES'
         end
 
         # OTHER_CFLAGS safe append
