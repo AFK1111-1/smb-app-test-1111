@@ -64,6 +64,13 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         # RNFBMessaging specific fix for Xcode 16.1 CompileC errors
         if target.name == 'RNFBMessaging'
           config.build_settings['USE_HEADERMAP'] = 'YES'
+          # Explicitly add header search paths for Firebase headers
+          search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
+          search_paths = [search_paths] if search_paths.is_a?(String)
+          ['"$(PODS_ROOT)/Headers/Public/FirebaseCore"', '"$(PODS_ROOT)/Headers/Public/FirebaseMessaging"', '"$(PODS_ROOT)/Headers/Public/FirebaseInstallations"'].each do |path|
+            search_paths << path unless search_paths.include?(path)
+          end
+          config.build_settings['HEADER_SEARCH_PATHS'] = search_paths
         end
 
         # OTHER_CFLAGS safe append
