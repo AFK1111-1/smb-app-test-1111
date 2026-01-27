@@ -6,7 +6,7 @@ import * as path from 'path';
  * Config plugin to fix iOS build issues for Xcode 16.1 and React Native Firebase
  * This plugin performs the following:
  * 1. Sets $RNFirebaseAsStaticFramework = true
- * 2. Adds a pre_install hook for modular headers
+ * 2. Enables use_modular_headers! globally
  * 3. Adds a comprehensive post_install hook for build settings
  */
 const withPodfileModifications: ConfigPlugin = (config) => {
@@ -30,18 +30,10 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         contents = '$RNFirebaseAsStaticFramework = true\n' + contents;
       }
 
-      // 2. Add pre_install hook for modular headers if not present
-      const preInstallHook = `
-pre_install do |installer|
-  installer.pod_targets.each do |pod|
-    if pod.name.start_with?('RNFB') || pod.name.start_with?('React')
-      pod.use_modular_headers = true
-    end
-  end
-end
-`;
-      if (!contents.includes('pre_install do |installer|')) {
-        contents = contents.replace(/platform :ios/, preInstallHook + '\nplatform :ios');
+      // 2. Enable modular headers globally for consistent module map generation
+      // This is crucial for Firebase modules to find each other in Xcode 16.1
+      if (!contents.includes('use_modular_headers!')) {
+        contents = 'use_modular_headers!\n' + contents;
       }
 
       // 3. Comprehensive post_install hook
@@ -64,15 +56,20 @@ end
         config.build_settings['CLANG_ENABLE_MODULE_DEBUGGING'] = 'NO'
         
         # Disable treating modularity warnings as errors
-        current_cflags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
-        if current_cflags.is_a?(String)
-          config.build_settings['OTHER_CFLAGS'] = "#{current_cflags} -Wno-error=non-modular-include-in-framework-module"
+        # Handle both String and Array formats for OTHER_CFLAGS
+        cflags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
+        if cflags.is_a?(String)
+          config.build_settings['OTHER_CFLAGS'] = "#{cflags} -Wno-error=non-modular-include-in-framework-module"
         else
           config.build_settings['OTHER_CFLAGS'] << '-Wno-error=non-modular-include-in-framework-module'
         end
 
         # Firebase Specific fix for symbol conflicts and protobuf
         config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+        # Ensure it's an array for appending
+        if config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'].is_a?(String)
+           config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = [config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']]
+        end
         config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1'
         config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FIRMessaging_No_Symbols_Conflict=1'
       end
