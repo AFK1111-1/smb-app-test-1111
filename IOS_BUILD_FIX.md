@@ -18,6 +18,7 @@ PrecompileModule failure for RNFBApp and other modules when building with Xcode 
 - **Definitive Fix**: Relies on pure build settings (`CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`).
 - **BoringSSL Fix**: Disables `USE_HEADERMAP` for `BoringSSL-GRPC`.
 - **Robust Merging**: Merges all settings into a single `post_install` hook.
+- **RNFBMessaging Fix**: Explicitly enables `USE_HEADERMAP` for `RNFBMessaging` to resolve `CompileC` errors.
 - **Aggressive Fixes**: Disables `CLANG_ENABLE_MODULE_DEBUGGING`, `SWIFT_ENABLE_EXPLICIT_MODULES`, and sets `SWIFT_VERSION=5.0`.
 - Disables treating modularity warnings as errors with `-Wno-error=non-modular-include-in-framework-module`
 

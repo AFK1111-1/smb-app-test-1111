@@ -61,6 +61,11 @@ const withPodfileModifications: ConfigPlugin = (config) => {
           config.build_settings['USE_HEADERMAP'] = 'NO'
         end
 
+        # RNFBMessaging specific fix for Xcode 16.1 CompileC errors
+        if target.name == 'RNFBMessaging'
+          config.build_settings['USE_HEADERMAP'] = 'YES'
+        end
+
         # OTHER_CFLAGS safe append
         cflags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
         cflags = [cflags] if cflags.is_a?(String)
