@@ -62,7 +62,7 @@ const withPodfileModifications: ConfigPlugin = (config) => {
           search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
           search_paths = [search_paths] if search_paths.is_a?(String)
           # Add public Firebase headers
-          ['"\\${PODS_ROOT}/Headers/Public/Firebase"', '"\\${PODS_ROOT}/Headers/Public/FirebaseCore"', '"\\${PODS_ROOT}/Headers/Public/FirebaseMessaging"'].each do |path|
+          ['"\${PODS_ROOT}/Headers/Public/Firebase"', '"\${PODS_ROOT}/Headers/Public/FirebaseCore"', '"\${PODS_ROOT}/Headers/Public/FirebaseMessaging"'].each do |path|
              search_paths << path unless search_paths.include?(path)
           end
           config.build_settings['HEADER_SEARCH_PATHS'] = search_paths
