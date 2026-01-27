@@ -13,7 +13,7 @@ PrecompileModule failure for RNFBApp and other modules when building with Xcode 
 - Sets Swift compilation mode to `wholemodule`
 - Disables module debugging
 - Injects `$RNFirebaseAsStaticFramework = true` into Podfile
-- **Header Search Paths**: Explicitly injects `HEADER_SEARCH_PATHS` for `RNFBMessaging` (`${PODS_ROOT}/Headers/Public/Firebase` etc.) to fix `CompileC` errors.
+- **Header Maps**: Explicitly enables `USE_HEADERMAP=YES` for `RNFBMessaging` to fix header discovery in static linkage.
 - **Version Pinning**: Fixed `@react-native-firebase` versions to `23.7.0` to avoid build regressions in `23.8.0`.
 - **Definitive Fix**: Relies on pure build settings (`CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES`) with `modular_headers` removed.
 - **BoringSSL Fix**: Disables `USE_HEADERMAP` for `BoringSSL-GRPC` to resolve Xcode 16.1 linker issues.

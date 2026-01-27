@@ -57,15 +57,9 @@ const withPodfileModifications: ConfigPlugin = (config) => {
           config.build_settings['USE_HEADERMAP'] = 'NO'
         end
         
-        # RNFBMessaging specific fix: explicit header search paths for static linking
+        # RNFBMessaging specific fix: Re-enable headermaps to find headers
         if target.name == 'RNFBMessaging'
-          search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
-          search_paths = [search_paths] if search_paths.is_a?(String)
-          # Add public Firebase headers
-          ['"\${PODS_ROOT}/Headers/Public/Firebase"', '"\${PODS_ROOT}/Headers/Public/FirebaseCore"', '"\${PODS_ROOT}/Headers/Public/FirebaseMessaging"'].each do |path|
-             search_paths << path unless search_paths.include?(path)
-          end
-          config.build_settings['HEADER_SEARCH_PATHS'] = search_paths
+          config.build_settings['USE_HEADERMAP'] = 'YES'
         end
 
         # OTHER_CFLAGS safe append
