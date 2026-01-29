@@ -54,7 +54,8 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         config.build_settings['CLANG_ENABLE_COMMON_BLOCKS'] = 'YES'
 
         # RNFBMessaging/RNFBApp specific fix for Xcode 16.1 CompileC errors
-        if target.name == 'RNFBMessaging' || target.name == 'RNFBApp'
+        # RNFBMessaging/RNFBApp specific fix for Xcode 16.1 CompileC errors
+        if target.name.include?('RNFBMessaging') || target.name.include?('RNFBApp')
           # Explicitly add header search paths for Firebase and React headers
           search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
           search_paths = [search_paths] if search_paths.is_a?(String)
@@ -72,17 +73,19 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         end
 
         # SDWebImageWebPCoder / SDWebImage specific fix
-        if target.name == 'SDWebImageWebPCoder' || target.name == 'SDWebImage' || target.name == 'libwebp'
+        if target.name.include?('SDWebImageWebPCoder') || target.name.include?('SDWebImage') || target.name.include?('libwebp')
           config.build_settings['USE_HEADERMAP'] = 'YES'
           search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
           search_paths = [search_paths] if search_paths.is_a?(String)
           [
             '$(PODS_ROOT)/Headers/Public/SDWebImage',
-            '$(PODS_ROOT)/Headers/Public/libwebp'
+            '$(PODS_ROOT)/Headers/Public/libwebp',
+            '$(PODS_ROOT)/Headers/Public'
           ].each do |path|
             search_paths << path unless search_paths.include?(path)
           end
           config.build_settings['HEADER_SEARCH_PATHS'] = search_paths
+          config.build_settings['CLANG_ENABLE_MODULES'] = 'YES'
         end
 
         # OTHER_CFLAGS safe append
