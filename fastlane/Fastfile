@@ -112,110 +112,376 @@ platform :ios do
 
   desc "Submit a new QA build to TestFlight"
   lane :qa_release do
-    # Setup App Store Connect API authentication
-    api_key = app_store_connect_api_key(
-      key_id: ENV['APP_STORE_CONNECT_API_KEY_ID'],
-      issuer_id: ENV['APP_STORE_CONNECT_ISSUER_ID'],
-      key_filepath: "#{Dir.pwd}/../credentials/ios/AuthKey.p8"
-    )
-
-    # Fetch App Store provisioning profiles and certificates from private Git repo
-    match(
-      type: "appstore",
-      readonly: false,
-      app_identifier: "com.insighture.smbmobile",
-      git_url: "git@github.com:insighture/smb-mobile-fastlane.git",
-      api_key: api_key,
-      force_for_new_devices: true,
-      keychain_password: ENV['KEYCHAIN_PASSWORD'],
-      keychain_name: ENV['KEYCHAIN_NAME']
-    )
-    
-    update_code_signing_settings(
-      use_automatic_signing: false,
-      path: "ios/smbmobile.xcodeproj",
-      team_id: "96W7U4JYV4",
-      profile_name: "match AppStore com.insighture.smbmobile",
-      code_sign_identity: "iPhone Distribution",
-      targets: ["smbmobile"]
-    )
-
-    # Increment version number
-    increment_version_number(
-      xcodeproj: "ios/smbmobile.xcodeproj",
-      bump_type: "patch"
-    )
-    
-    # Get latest TestFlight build and increment
     begin
-      latest_build = latest_testflight_build_number(
-        app_identifier: "com.insighture.smbmobile",
-        api_key: api_key
+      # Setup App Store Connect API authentication
+      api_key = app_store_connect_api_key(
+        key_id: ENV['APP_STORE_CONNECT_API_KEY_ID'],
+        issuer_id: ENV['APP_STORE_CONNECT_ISSUER_ID'],
+        key_filepath: "#{Dir.pwd}/../credentials/ios/AuthKey.p8"
       )
+
+      # Validate build environment
+      validate_build_environment
+
+      # Fetch App Store provisioning profiles and certificates from private Git repo
+      match(
+        type: "appstore",
+        readonly: false,
+        app_identifier: "com.insighture.smbmobile",
+        git_url: "git@github.com:insighture/smb-mobile-fastlane.git",
+        api_key: api_key,
+        force_for_new_devices: true,
+        keychain_password: ENV['KEYCHAIN_PASSWORD'],
+        keychain_name: ENV['KEYCHAIN_NAME']
+      )
+      
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path: "ios/smbmobile.xcodeproj",
+        team_id: "96W7U4JYV4",
+        profile_name: "match AppStore com.insighture.smbmobile",
+        code_sign_identity: "iPhone Distribution",
+        targets: ["smbmobile"]
+      )
+
+      # Increment version number
+      increment_version_number(
+        xcodeproj: "ios/smbmobile.xcodeproj",
+        bump_type: "patch"
+      )
+      
+      # Get latest TestFlight build and increment with retry logic
+      build_number = get_next_build_number(api_key)
       increment_build_number(
         xcodeproj: "ios/smbmobile.xcodeproj",
-        build_number: latest_build + 1
+        build_number: build_number
       )
-    rescue => ex
-      increment_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
-    end
 
-    # Build configuration
-    build_config = {
-      workspace: "ios/smbmobile.xcworkspace",
-      scheme: "smbmobile",
-      configuration: "Release",
-      export_method: "app-store",
-      output_directory: "./ios/build",
-      output_name: "smbmobile.ipa",
-      destination: "generic/platform=iOS",
-      export_options: {
-        method: "app-store",
-        provisioningProfiles: {
-          "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
+      # Enhanced build configuration for Xcode 16.1
+      build_config = {
+        workspace: "ios/smbmobile.xcworkspace",
+        scheme: "smbmobile",
+        configuration: "Release",
+        export_method: "app-store",
+        output_directory: "./ios/build",
+        output_name: "smbmobile.ipa",
+        destination: "generic/platform=iOS",
+        export_options: {
+          method: "app-store",
+          provisioningProfiles: {
+            "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
+          },
+          teamID: "96W7U4JYV4",
+          compileBitcode: false,
+          uploadBitcode: false,
+          uploadSymbols: true,
+          thinning: "<none>"
         },
-        teamID: "96W7U4JYV4"
-      },
-      xcargs: "ONLY_ACTIVE_ARCH=NO ENABLE_BITCODE=NO COMPILER_INDEX_STORE_ENABLE=NO CLANG_ENABLE_MODULE_VERIFIER=NO CLANG_ENABLE_EXPLICIT_MODULES=NO SWIFT_ENABLE_EXPLICIT_MODULES=NO CLANG_ENABLE_MODULE_DEBUGGING=NO CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES DEFINES_MODULE=YES USE_HEADERMAP=NO GCC_PREPROCESSOR_DEFINITIONS='$(inherited) GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1 FIRMessaging_No_Symbols_Conflict=1 RNFB_MESSAGING_USE_STATIC_DYNAMIC_FRAMEWORK=1' CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER=NO SWIFT_VERSION=5.0",
-      skip_profile_detection: true
-    }
+        # Comprehensive Xcode 16.1 compatibility xcargs
+        xcargs: build_xcargs_for_xcode16,
+        skip_profile_detection: true,
+        clean: true,
+        include_bitcode: false,
+        include_symbols: true
+      }
 
-    # Build and archive
-    build_ios_app(build_config)
+      # Build and archive with retry logic
+      build_with_retry(build_config, 3)
 
-    # Upload to TestFlight with auto-retry on duplicate build errors
+      # Upload to TestFlight with comprehensive retry logic
+      upload_to_testflight_with_retry(api_key, 5)
+
+      # Post-build validation
+      validate_build_artifacts
+
+      changelog_from_git_commits
+
+    rescue => ex
+      handle_build_error(ex)
+      raise ex
+    end
+  end
+
+  # Helper method to get next build number with retry logic
+  def get_next_build_number(api_key)
     max_retries = 3
     retry_count = 0
-    upload_success = false
     
-    while retry_count < max_retries && !upload_success
+    while retry_count < max_retries
       begin
-        upload_to_testflight(
-          skip_waiting_for_build_processing: true,
+        latest_build = latest_testflight_build_number(
+          app_identifier: "com.insighture.smbmobile",
           api_key: api_key
         )
-        upload_success = true
+        return latest_build + 1
       rescue => ex
-        if ex.message.include?("bundle version must be higher") || ex.message.include?("DUPLICATE")
-          retry_count += 1
+        retry_count += 1
+        if retry_count >= max_retries
+          UI.message("Failed to get latest build number, using timestamp-based number")
+          return Time.now.to_i % 100000
+        end
+        sleep(2 ** retry_count) # Exponential backoff
+      end
+    end
+  end
+
+  # Comprehensive Xcode 16.1 build arguments
+  def build_xcargs_for_xcode16
+    [
+      # Core Xcode 16.1 compatibility settings
+      "ONLY_ACTIVE_ARCH=NO",
+      "ENABLE_BITCODE=NO",
+      "COMPILER_INDEX_STORE_ENABLE=NO",
+      "CLANG_ENABLE_MODULE_VERIFIER=NO",
+      "CLANG_ENABLE_EXPLICIT_MODULES=NO",
+      "SWIFT_ENABLE_EXPLICIT_MODULES=NO",
+      "CLANG_ENABLE_MODULE_DEBUGGING=NO",
+      "CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES",
+      "CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER=NO",
+      "DEFINES_MODULE=YES",
+      "USE_HEADERMAP=NO",
+      "SWIFT_VERSION=5.0",
+      
+      # Firebase-specific preprocessor definitions
+      "GCC_PREPROCESSOR_DEFINITIONS='$(inherited) GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1 FIRMessaging_No_Symbols_Conflict=1 RNFB_MESSAGING_USE_STATIC_DYNAMIC_FRAMEWORK=1 RNFB_APP_USE_STATIC_DYNAMIC_FRAMEWORK=1 FIREBASE_ANALYTICS_SUPPRESS_WARNING=1'",
+      
+      # Performance and compatibility settings
+      "CLANG_ENABLE_COMMON_BLOCKS=YES",
+      "CLANG_ENABLE_OBJC_ARC=YES",
+      "ENABLE_STRICT_OBJC_MSGSEND=YES",
+      "GCC_NO_COMMON_BLOCKS=YES",
+      "CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF=YES",
+      
+      # Build optimization
+      "GCC_OPTIMIZATION_LEVEL=s",
+      "SWIFT_OPTIMIZATION_LEVEL=-O",
+      "DEPLOYMENT_POSTPROCESSING=YES",
+      "STRIP_INSTALLED_PRODUCT=YES",
+      "COPY_PHASE_STRIP=YES",
+      
+      # Parallel compilation
+      "CLANG_ENABLE_PARALLEL_COMPILATION=YES",
+      "CLANG_ENABLE_INCREMENTAL_COMPILATION=YES"
+    ].join(" ")
+  end
+
+  # Build with retry logic for transient failures
+  def build_with_retry(build_config, max_retries)
+    retry_count = 0
+    
+    while retry_count < max_retries
+      begin
+        UI.message("🔨 Starting build attempt #{retry_count + 1}/#{max_retries}")
+        build_ios_app(build_config)
+        UI.success("✅ Build completed successfully")
+        return
+      rescue => ex
+        retry_count += 1
+        
+        if retry_count < max_retries && is_retryable_error?(ex)
+          UI.important("⚠️ Build failed with retryable error, retrying in #{2 ** retry_count} seconds...")
+          sleep(2 ** retry_count) # Exponential backoff
           
-          if retry_count < max_retries
-            current_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
-            increment_build_number(
-              xcodeproj: "ios/smbmobile.xcodeproj",
-              build_number: current_build.to_i + 1
-            )
-            build_ios_app(build_config)
-          else
-            raise ex
-          end
+          # Clean derived data before retry
+          sh("rm -rf ~/Library/Developer/Xcode/DerivedData/*")
         else
+          UI.error("❌ Build failed after #{retry_count} attempts")
           raise ex
         end
       end
     end
+  end
 
-    changelog_from_git_commits
+  # Upload to TestFlight with comprehensive retry logic
+  def upload_to_testflight_with_retry(api_key, max_retries)
+    retry_count = 0
+    
+    while retry_count < max_retries
+      begin
+        UI.message("🚀 Starting TestFlight upload attempt #{retry_count + 1}/#{max_retries}")
+        
+        upload_to_testflight(
+          skip_waiting_for_build_processing: true,
+          api_key: api_key,
+          distribute_external: false,
+          notify_external_testers: false,
+          changelog: "QA Build - Automated deployment"
+        )
+        
+        UI.success("✅ TestFlight upload completed successfully")
+        return
+        
+      rescue => ex
+        retry_count += 1
+        
+        if ex.message.include?("bundle version must be higher") || ex.message.include?("DUPLICATE")
+          UI.important("⚠️ Duplicate build detected, incrementing build number...")
+          
+          current_build = get_build_number(xcodeproj: "ios/smbmobile.xcodeproj")
+          increment_build_number(
+            xcodeproj: "ios/smbmobile.xcodeproj",
+            build_number: current_build.to_i + 1
+          )
+          
+          # Rebuild with new build number
+          build_config = {
+            workspace: "ios/smbmobile.xcworkspace",
+            scheme: "smbmobile",
+            configuration: "Release",
+            export_method: "app-store",
+            output_directory: "./ios/build",
+            output_name: "smbmobile.ipa",
+            destination: "generic/platform=iOS",
+            export_options: {
+              method: "app-store",
+              provisioningProfiles: {
+                "com.insighture.smbmobile" => "match AppStore com.insighture.smbmobile"
+              },
+              teamID: "96W7U4JYV4"
+            },
+            xcargs: build_xcargs_for_xcode16,
+            skip_profile_detection: true
+          }
+          
+          build_ios_app(build_config)
+          
+        elsif retry_count < max_retries && is_retryable_upload_error?(ex)
+          UI.important("⚠️ Upload failed with retryable error, retrying in #{5 * retry_count} seconds...")
+          sleep(5 * retry_count) # Linear backoff for uploads
+        else
+          UI.error("❌ TestFlight upload failed after #{retry_count} attempts")
+          raise ex
+        end
+      end
+    end
+  end
+
+  # Validate build environment before starting
+  def validate_build_environment
+    UI.message("🔍 Validating build environment...")
+    
+    # Check Xcode version
+    xcode_version = sh("xcodebuild -version | head -n 1 | awk '{print $2}'", log: false).strip
+    UI.message("Xcode version: #{xcode_version}")
+    
+    unless xcode_version.start_with?("16.1")
+      UI.user_error!("❌ Xcode 16.1 is required, found #{xcode_version}")
+    end
+    
+    # Check iOS SDK
+    ios_sdk = sh("xcrun --show-sdk-version --sdk iphoneos", log: false).strip
+    UI.message("iOS SDK version: #{ios_sdk}")
+    
+    # Validate workspace
+    unless File.exist?("ios/smbmobile.xcworkspace")
+      UI.user_error!("❌ Workspace file not found")
+    end
+    
+    # Validate Firebase configuration
+    unless File.exist?("GoogleService-Info.plist")
+      UI.user_error!("❌ Firebase configuration file not found")
+    end
+    
+    UI.success("✅ Build environment validation passed")
+  end
+
+  # Validate build artifacts after successful build
+  def validate_build_artifacts
+    UI.message("🔍 Validating build artifacts...")
+    
+    ipa_path = "ios/build/smbmobile.ipa"
+    unless File.exist?(ipa_path)
+      UI.user_error!("❌ IPA file not found at #{ipa_path}")
+    end
+    
+    # Check IPA size (should be reasonable)
+    ipa_size = File.size(ipa_path) / (1024 * 1024) # MB
+    UI.message("IPA size: #{ipa_size} MB")
+    
+    if ipa_size < 10
+      UI.user_error!("❌ IPA file seems too small (#{ipa_size} MB)")
+    end
+    
+    if ipa_size > 500
+      UI.important("⚠️ IPA file is quite large (#{ipa_size} MB)")
+    end
+    
+    UI.success("✅ Build artifacts validation passed")
+  end
+
+  # Check if error is retryable
+  def is_retryable_error?(error)
+    retryable_patterns = [
+      /timeout/i,
+      /network/i,
+      /connection/i,
+      /temporary/i,
+      /busy/i,
+      /locked/i,
+      /unable to boot simulator/i,
+      /xcodebuild.*exited with non-zero exit status/i
+    ]
+    
+    retryable_patterns.any? { |pattern| error.message.match?(pattern) }
+  end
+
+  # Check if upload error is retryable
+  def is_retryable_upload_error?(error)
+    retryable_patterns = [
+      /timeout/i,
+      /network/i,
+      /connection/i,
+      /temporary/i,
+      /rate limit/i,
+      /service unavailable/i,
+      /internal server error/i
+    ]
+    
+    retryable_patterns.any? { |pattern| error.message.match?(pattern) }
+  end
+
+  # Comprehensive error handling
+  def handle_build_error(error)
+    UI.error("❌ Build failed with error: #{error.message}")
+    
+    # Categorize error types
+    if error.message.include?("Code Sign error")
+      UI.error("🔐 Code signing error detected")
+      UI.message("Suggestions:")
+      UI.message("- Check provisioning profiles")
+      UI.message("- Verify certificates in keychain")
+      UI.message("- Run 'fastlane match' to refresh certificates")
+      
+    elsif error.message.include?("Firebase") || error.message.include?("RNFB")
+      UI.error("🔥 Firebase-related error detected")
+      UI.message("Suggestions:")
+      UI.message("- Verify GoogleService-Info.plist is present")
+      UI.message("- Check Firebase SDK versions")
+      UI.message("- Ensure Podfile modifications are applied")
+      
+    elsif error.message.include?("module") || error.message.include?("import")
+      UI.error("📦 Module/import error detected")
+      UI.message("Suggestions:")
+      UI.message("- Clean derived data")
+      UI.message("- Run 'pod install --repo-update'")
+      UI.message("- Check Xcode 16.1 compatibility settings")
+      
+    elsif error.message.include?("TestFlight") || error.message.include?("upload")
+      UI.error("🚀 TestFlight upload error detected")
+      UI.message("Suggestions:")
+      UI.message("- Check App Store Connect API key")
+      UI.message("- Verify network connectivity")
+      UI.message("- Try uploading manually via Xcode")
+      
+    else
+      UI.error("❓ Unknown error type")
+      UI.message("Check the full error log above for more details")
+    end
+    
+    # Save error log
+    error_log_path = "fastlane/error_log_#{Time.now.to_i}.txt"
+    File.write(error_log_path, "#{error.message}\n#{error.backtrace.join("\n")}")
+    UI.message("Error log saved to: #{error_log_path}")
   end
 
   desc "Submit a new staging build to TestFlight"
