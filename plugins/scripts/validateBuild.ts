@@ -15,7 +15,6 @@ interface ValidationResult {
   passed: boolean;
   message: string;
   details?: string;
-  critical?: boolean;
 }
 
 class BuildValidator {
@@ -250,46 +249,24 @@ class BuildValidator {
   async validateAll(): Promise<ValidationResult[]> {
     console.log('🔍 Running build environment validation...\n');
     
-    const coreValidations = [
-      { name: 'Xcode Version', validator: () => this.validateXcode(), critical: true },
-      { name: 'iOS SDK', validator: () => this.validateIOSSDK(), critical: true },
-      { name: 'CocoaPods', validator: () => this.validateCocoaPods(), critical: true }
-    ];
-    
-    const buildValidations = [
-      { name: 'Workspace', validator: () => this.validateWorkspace(), critical: false },
-      { name: 'Podfile Modifications', validator: () => this.validatePodfileModifications(), critical: false },
-      { name: 'Firebase Configuration', validator: () => this.validateFirebaseConfig(), critical: false },
-      { name: 'Code Signing', validator: () => this.validateCodeSigning(), critical: false }
+    const validations = [
+      { name: 'Xcode Version', validator: () => this.validateXcode() },
+      { name: 'iOS SDK', validator: () => this.validateIOSSDK() },
+      { name: 'Workspace', validator: () => this.validateWorkspace() },
+      { name: 'Podfile Modifications', validator: () => this.validatePodfileModifications() },
+      { name: 'Firebase Configuration', validator: () => this.validateFirebaseConfig() },
+      { name: 'CocoaPods', validator: () => this.validateCocoaPods() },
+      { name: 'Code Signing', validator: () => this.validateCodeSigning() }
     ];
     
     const results: ValidationResult[] = [];
     
-    // Run core validations first
-    console.log('🔧 Core Development Environment:');
-    for (const validation of coreValidations) {
+    for (const validation of validations) {
       console.log(`Checking ${validation.name}...`);
       const result = validation.validator();
-      results.push({ ...result, critical: validation.critical });
+      results.push(result);
       
       const status = result.passed ? '✅' : '❌';
-      console.log(`${status} ${result.message}`);
-      
-      if (result.details) {
-        console.log(`   ${result.details}`);
-      }
-      
-      console.log();
-    }
-    
-    // Run build-specific validations
-    console.log('📱 Build-Specific Configuration (may fail before prebuild):');
-    for (const validation of buildValidations) {
-      console.log(`Checking ${validation.name}...`);
-      const result = validation.validator();
-      results.push({ ...result, critical: validation.critical });
-      
-      const status = result.passed ? '✅' : '⚠️ ';
       console.log(`${status} ${result.message}`);
       
       if (result.details) {
@@ -309,32 +286,20 @@ async function main() {
   try {
     const results = await validator.validateAll();
     
-    const criticalFailures = results.filter(r => !r.passed && r.critical);
-    const nonCriticalFailures = results.filter(r => !r.passed && !r.critical);
+    const failedValidations = results.filter(r => !r.passed);
     
-    if (criticalFailures.length > 0) {
-      console.log(`❌ ${criticalFailures.length} critical validation(s) failed:`);
-      criticalFailures.forEach(result => {
+    if (failedValidations.length > 0) {
+      console.log(`❌ ${failedValidations.length} validation(s) failed:`);
+      failedValidations.forEach(result => {
         console.log(`   • ${result.message}`);
       });
-      console.log('\nPlease fix the critical issues above before building.');
+      console.log('\nPlease fix the issues above before building.');
       process.exit(1);
+    } else {
+      console.log('✅ All build environment validations passed!');
+      console.log('🚀 Ready to build for iOS with Xcode 16.1');
+      process.exit(0);
     }
-    
-    if (nonCriticalFailures.length > 0) {
-      console.log(`⚠️  ${nonCriticalFailures.length} build-specific validation(s) failed (expected before prebuild):`);
-      nonCriticalFailures.forEach(result => {
-        console.log(`   • ${result.message}`);
-      });
-      console.log('\n💡 These failures are normal in local development.');
-      console.log('   Run "npm run prebuild" and setup Firebase/certificates to resolve them.');
-    }
-    
-    console.log('\n✅ Core development environment is ready!');
-    console.log('🚀 Ready for iOS development with Xcode 16.1+ compatibility');
-    
-    // Only exit with error code if critical validations failed
-    process.exit(0);
     
   } catch (error) {
     console.error('❌ Build validation failed with error:', error);
