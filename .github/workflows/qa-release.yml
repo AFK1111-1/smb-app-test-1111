@@ -2,11 +2,11 @@ name: QA Release Build
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [main, develop]
-  #   paths-ignore:
-  #     - '**.md'
-  #     - 'docs/**'
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
 
 jobs:
   qa-build:
@@ -72,7 +72,7 @@ jobs:
 
       - name: Run build environment validation
         run: npm run validate:build
-
+        run: |
       - name: Setup environment variables
         run: |
           echo "KINDE_DOMAIN=${{ vars.KINDE_DOMAIN }}" >> .env
