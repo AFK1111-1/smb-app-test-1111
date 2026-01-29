@@ -2,77 +2,37 @@ name: QA Release Build
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, develop]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
 
 jobs:
   qa-build:
     runs-on: macos-15
     name: Build QA Release
     permissions: write-all
-    timeout-minutes: 60
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js with caching
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules
-            ~/.npm
-            ~/Library/Caches/CocoaPods
-            ios/Pods
-          key: ${{ runner.os }}-deps-${{ hashFiles('package-lock.json', 'ios/Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-deps-
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Install dependencies with retry
-        run: |
-          for i in {1..3}; do
-            npm ci && break || {
-              echo "npm ci failed, attempt $i/3"
-              rm -rf node_modules package-lock.json
-              npm install
-              [ $i -eq 3 ] && exit 1
-              sleep 5
-            }
-          done
-
-      - name: Install Ruby and Fastlane with caching
+      - name: Install Ruby and Fastlane
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
-          cache-version: 1
 
-      - name: Install Fastlane with retry
+      - name: Install Fastlane
         run: |
-          for i in {1..3}; do
-            gem install fastlane && bundle install && break || {
-              echo "Fastlane installation failed, attempt $i/3"
-              [ $i -eq 3 ] && exit 1
-              sleep 5
-            }
-          done
+          gem install fastlane
+          bundle install
 
-      - name: Run dependency validation
-        run: npm run validate:dependencies
-
-      - name: Run build environment validation
-        run: npm run validate:build
-        run: |
       - name: Setup environment variables
         run: |
           echo "KINDE_DOMAIN=${{ vars.KINDE_DOMAIN }}" >> .env
@@ -138,108 +98,11 @@ jobs:
       - name: Expo Prebuild for iOS
         run: npm run prebuild -- --platform ios --clean
 
-      - name: Install CocoaPods dependencies with retry and optimization
+      - name: Install CocoaPods dependencies
         run: |
           cd ios
-          
-          # Clean previous installations if they exist
-          rm -rf Pods Podfile.lock
-          
-          # Install with retry logic and optimization
-          for i in {1..3}; do
-            pod install --repo-update --clean-install && break || {
-              echo "Pod install failed, attempt $i/3"
-              pod cache clean --all
-              rm -rf ~/Library/Caches/CocoaPods
-              [ $i -eq 3 ] && exit 1
-              sleep 10
-            }
-          done
-          
+          pod install
           cd ..
-
-      - name: Enhanced Podfile and Firebase validation
-        run: |
-          echo "🔍 Comprehensive build configuration validation..."
-          
-          # Validate Podfile exists and has modifications
-          if [ -f "ios/Podfile" ]; then
-            echo "✅ Podfile exists"
-            if grep -q "XCODE 16 DEFINITIVE FIX" ios/Podfile; then
-              echo "✅ Xcode 16.1 compatibility settings found in Podfile"
-              
-              # Validate specific settings
-              if grep -q "CLANG_ENABLE_MODULE_VERIFIER.*NO" ios/Podfile; then
-                echo "✅ Module verification disabled"
-              else
-                echo "❌ Module verification not properly disabled"
-                exit 1
-              fi
-              
-              if grep -q "firebase_targets.*RNFBMessaging" ios/Podfile; then
-                echo "✅ Firebase targets configuration found"
-              else
-                echo "❌ Firebase targets not properly configured"
-                exit 1
-              fi
-              
-            else
-              echo "❌ Xcode 16.1 compatibility settings NOT found in Podfile"
-              echo "📋 Podfile content preview:"
-              head -20 ios/Podfile
-              exit 1
-            fi
-          else
-            echo "❌ Podfile not found"
-            exit 1
-          fi
-          
-          # Validate Firebase configuration with detailed checks
-          if [ -f "GoogleService-Info.plist" ]; then
-            echo "✅ Firebase configuration file exists"
-            
-            # Check bundle ID
-            if grep -q "com.insighture.smbmobile" GoogleService-Info.plist; then
-              echo "✅ Correct bundle ID found in Firebase config"
-            else
-              echo "❌ Bundle ID mismatch in Firebase config"
-              exit 1
-            fi
-            
-            # Check required Firebase keys
-            required_keys=("BUNDLE_ID" "PROJECT_ID" "GOOGLE_APP_ID")
-            for key in "${required_keys[@]}"; do
-              if grep -q "$key" GoogleService-Info.plist; then
-                echo "✅ Required Firebase key found: $key"
-              else
-                echo "❌ Missing required Firebase key: $key"
-                exit 1
-              fi
-            done
-            
-          else
-            echo "❌ Firebase configuration file missing"
-            exit 1
-          fi
-          
-          # Validate Podfile.lock for correct versions
-          if [ -f "ios/Podfile.lock" ]; then
-            echo "✅ Podfile.lock exists"
-            
-            # Check Firebase SDK versions
-            if grep -q "Firebase.*11\." ios/Podfile.lock; then
-              echo "✅ Firebase SDK 11.x found (Xcode 16.1 compatible)"
-            else
-              echo "⚠️  Firebase SDK version may not be optimal for Xcode 16.1"
-            fi
-            
-            # Check React Native Firebase versions
-            if grep -q "RNFBApp.*23\." ios/Podfile.lock; then
-              echo "✅ React Native Firebase 23.x found (Xcode 16.1 compatible)"
-            else
-              echo "⚠️  React Native Firebase version may not be optimal"
-            fi
-          fi
 
       - name: Setup SSH for Fastlane Match
         run: |
@@ -272,145 +135,35 @@ jobs:
           sleep 30
           xcrun simctl list runtimes | grep iOS || echo "No iOS runtimes found"
 
-      - name: Validate Xcode 16.1 Installation
+      - name: Create temporary keychain
         run: |
-          xcodebuild -version
-          xcrun --show-sdk-version --sdk iphoneos
-          xcode-select -p
-
-      - name: Enhanced keychain management with error handling
-        run: |
-          echo "🔐 Setting up secure keychain management..."
-          
-          # Generate secure keychain password
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-          KEYCHAIN_NAME="build-$(date +%s).keychain"
+          KEYCHAIN_NAME="build.keychain"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
           echo "KEYCHAIN_NAME=$KEYCHAIN_NAME" >> $GITHUB_ENV
           
-          # Clean up any existing keychains
-          security list-keychains -d user | grep -o '"[^"]*"' | xargs -I {} security delete-keychain {} 2>/dev/null || true
-          
-          # Create new keychain with enhanced security
+          security delete-keychain "$KEYCHAIN_NAME" 2>/dev/null || true
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
           
-          # Configure keychain settings
           EXISTING_KEYCHAINS=$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')
           security list-keychains -d user -s "$KEYCHAIN_NAME" $EXISTING_KEYCHAINS
           security default-keychain -s "$KEYCHAIN_NAME"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
-          security set-keychain-settings -t 7200 -u "$KEYCHAIN_NAME"  # 2 hours timeout
-          
-          # Set partition list for codesigning
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME" 2>/dev/null || {
-            echo "⚠️  Partition list setup failed, but continuing..."
-          }
-          
-          echo "✅ Keychain setup completed successfully"
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN_NAME"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME" 2>/dev/null || true
 
       - name: Unlock keychain
         run: |
           security unlock-keychain -p "${{ env.KEYCHAIN_PASSWORD }}" "${{ env.KEYCHAIN_NAME }}"
 
-      - name: Comprehensive Xcode build cache cleanup
+      - name: Clean Xcode build cache
         run: |
-          echo "🧹 Performing comprehensive build cache cleanup..."
-          
-          # Clean Xcode derived data with size reporting
-          DERIVED_DATA_SIZE=$(du -sh ~/Library/Developer/Xcode/DerivedData 2>/dev/null | cut -f1 || echo "0B")
-          echo "📊 Current derived data size: $DERIVED_DATA_SIZE"
-          
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
-          rm -rf ~/Library/Caches/com.apple.dt.Xcode/*
-          
-          # Clean iOS simulator data
-          xcrun simctl delete unavailable 2>/dev/null || true
-          xcrun simctl erase all 2>/dev/null || true
-          
-          # Clean project-specific build artifacts
           cd ios
-          if [ -f "smbmobile.xcworkspace" ]; then
-            echo "🔨 Cleaning workspace build artifacts..."
-            xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile -configuration Release
-          fi
-          
-          # Remove any stale build directories
-          rm -rf build/
-          rm -rf Build/
-          
+          xcodebuild clean -workspace smbmobile.xcworkspace -scheme smbmobile
           cd ..
-          
-          echo "✅ Build cache cleanup completed"
 
-      - name: Comprehensive pre-build validation
-        run: |
-          echo "🔍 Running comprehensive pre-build validation..."
-          
-          # Check Xcode version and compatibility
-          XCODE_VERSION=$(xcodebuild -version | head -n 1 | awk '{print $2}')
-          echo "📱 Xcode version: $XCODE_VERSION"
-          
-          if [[ ! "$XCODE_VERSION" =~ ^16\.1 ]]; then
-            echo "❌ Xcode 16.1 is required, found $XCODE_VERSION"
-            exit 1
-          fi
-          
-          # Check iOS SDK version
-          IOS_SDK_VERSION=$(xcrun --show-sdk-version --sdk iphoneos)
-          echo "📱 iOS SDK version: $IOS_SDK_VERSION"
-          
-          if (( $(echo "$IOS_SDK_VERSION < 15.1" | bc -l) )); then
-            echo "❌ iOS SDK 15.1+ is required, found $IOS_SDK_VERSION"
-            exit 1
-          fi
-          
-          # Validate code signing setup
-          echo "🔐 Validating code signing setup..."
-          SIGNING_IDENTITIES=$(security find-identity -v -p codesigning | grep -c "iPhone" || echo "0")
-          echo "📋 Found $SIGNING_IDENTITIES code signing identities"
-          
-          if [ "$SIGNING_IDENTITIES" -eq "0" ]; then
-            echo "❌ No code signing identities found"
-            exit 1
-          fi
-          
-          # Check workspace and scheme
-          if [ -f "ios/smbmobile.xcworkspace" ]; then
-            echo "✅ Workspace file exists"
-            
-            # Validate scheme exists
-            if xcodebuild -workspace ios/smbmobile.xcworkspace -list | grep -q "smbmobile"; then
-              echo "✅ Scheme 'smbmobile' found"
-            else
-              echo "❌ Scheme 'smbmobile' not found"
-              xcodebuild -workspace ios/smbmobile.xcworkspace -list
-              exit 1
-            fi
-          else
-            echo "❌ Workspace file missing"
-            exit 1
-          fi
-          
-          # Validate build settings
-          echo "🔧 Validating build settings..."
-          BUILD_SETTINGS=$(xcodebuild -workspace ios/smbmobile.xcworkspace -scheme smbmobile -showBuildSettings -configuration Release)
-          
-          if echo "$BUILD_SETTINGS" | grep -q "IPHONEOS_DEPLOYMENT_TARGET.*15\."; then
-            echo "✅ iOS deployment target is 15.1+"
-          else
-            echo "⚠️  iOS deployment target may not be optimal"
-          fi
-          
-          # Check for required frameworks
-          if echo "$BUILD_SETTINGS" | grep -q "use_frameworks.*static"; then
-            echo "✅ Static frameworks configuration detected"
-          else
-            echo "⚠️  Static frameworks may not be properly configured"
-          fi
-          
-          echo "✅ Pre-build validation completed successfully"
-
-      - name: Build and Release iOS with enhanced error handling
+      - name: Build and Release iOS
         run: fastlane ios qa_release
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -418,150 +171,20 @@ jobs:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ env.KEYCHAIN_PASSWORD }}
           KEYCHAIN_NAME: ${{ env.KEYCHAIN_NAME }}
-          FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 180
-          FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 15
-          FASTLANE_SKIP_UPDATE_CHECK: true
-          FASTLANE_DISABLE_ANIMATION: true
-          FASTLANE_HIDE_GITHUB_ISSUES: true
-          FASTLANE_DISABLE_COLORS: true
-          # Enhanced build optimization
-          XCODE_XCCONFIG_FILE: ""
-          FASTLANE_EXPLICIT_OPEN_SIMULATOR: false
-        timeout-minutes: 45
+          FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 60
+          FASTLANE_XCODEBUILD_SETTINGS_RETRIES: 6
 
-      - name: Comprehensive post-build validation
-        if: success()
-        run: |
-          echo "🔍 Running comprehensive post-build validation..."
-          
-          # Check if IPA was created
-          IPA_PATH="ios/build/smbmobile.ipa"
-          if [ -f "$IPA_PATH" ]; then
-            echo "✅ IPA file created successfully"
-            
-            # Get detailed IPA information
-            IPA_SIZE=$(ls -lh "$IPA_PATH" | awk '{print $5}')
-            IPA_SIZE_BYTES=$(stat -f%z "$IPA_PATH" 2>/dev/null || stat -c%s "$IPA_PATH")
-            IPA_SIZE_MB=$((IPA_SIZE_BYTES / 1024 / 1024))
-            
-            echo "📊 IPA size: $IPA_SIZE ($IPA_SIZE_MB MB)"
-            
-            # Validate IPA size is reasonable
-            if [ "$IPA_SIZE_MB" -lt 10 ]; then
-              echo "❌ IPA file seems too small ($IPA_SIZE_MB MB) - possible build issue"
-              exit 1
-            elif [ "$IPA_SIZE_MB" -gt 500 ]; then
-              echo "⚠️  IPA file is quite large ($IPA_SIZE_MB MB) - consider optimization"
-            else
-              echo "✅ IPA size is within reasonable range"
-            fi
-            
-            # Validate IPA structure and contents
-            echo "🔍 Validating IPA structure..."
-            unzip -l "$IPA_PATH" | head -20
-            
-            # Check for required app bundle
-            if unzip -l "$IPA_PATH" | grep -q "Payload/smbmobile.app/"; then
-              echo "✅ App bundle found in IPA"
-            else
-              echo "❌ App bundle not found in IPA"
-              exit 1
-            fi
-            
-            # Check for Firebase configuration in bundle
-            if unzip -l "$IPA_PATH" | grep -q "GoogleService-Info.plist"; then
-              echo "✅ Firebase configuration embedded in IPA"
-            else
-              echo "⚠️  Firebase configuration may not be embedded"
-            fi
-            
-            # Validate code signing
-            echo "🔐 Validating IPA code signing..."
-            TEMP_DIR=$(mktemp -d)
-            unzip -q "$IPA_PATH" -d "$TEMP_DIR"
-            
-            if codesign -v "$TEMP_DIR/Payload/smbmobile.app" 2>/dev/null; then
-              echo "✅ IPA is properly code signed"
-            else
-              echo "❌ IPA code signing validation failed"
-              rm -rf "$TEMP_DIR"
-              exit 1
-            fi
-            
-            # Check provisioning profile
-            if security cms -D -i "$TEMP_DIR/Payload/smbmobile.app/embedded.mobileprovision" 2>/dev/null | grep -q "com.insighture.smbmobile"; then
-              echo "✅ Correct provisioning profile embedded"
-            else
-              echo "⚠️  Provisioning profile validation inconclusive"
-            fi
-            
-            rm -rf "$TEMP_DIR"
-            
-          else
-            echo "❌ IPA file not found at $IPA_PATH"
-            echo "📋 Contents of ios/build directory:"
-            ls -la ios/build/ || echo "Build directory does not exist"
-            exit 1
-          fi
-          
-          # Validate build logs for warnings
-          if [ -d "~/Library/Logs/gym/" ]; then
-            echo "📋 Checking build logs for critical warnings..."
-            CRITICAL_WARNINGS=$(find ~/Library/Logs/gym/ -name "*.log" -exec grep -l "error\|failed\|FAILED" {} \; | wc -l)
-            if [ "$CRITICAL_WARNINGS" -gt 0 ]; then
-              echo "⚠️  Found $CRITICAL_WARNINGS log files with potential issues"
-            else
-              echo "✅ No critical warnings found in build logs"
-            fi
-          fi
-          
-          echo "✅ Post-build validation completed successfully"
-
-      - name: Upload comprehensive error logs
+      - name: Upload Gym Logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: comprehensive-error-logs-${{ github.run_number }}
-          path: |
-            error_logs/
-            ~/Library/Logs/gym/
-            ~/Library/Developer/Xcode/DerivedData/*/Logs/
-            ios/build/logs/
-            fastlane/report.xml
-            fastlane/test_output/
-            ios/Podfile
-            ios/Podfile.lock
-            package.json
-            package-lock.json
-          retention-days: 7
-          if-no-files-found: ignore
+          name: fastlane-gym-logs
+          path: ~/Library/Logs/gym/
 
-      - name: Enhanced cleanup with error preservation
+      - name: Cleanup keychain
         if: always()
         run: |
-          echo "🧹 Performing enhanced cleanup..."
-          
-          # Preserve error logs before cleanup
-          if [ -d "~/Library/Logs/gym/" ]; then
-            mkdir -p error_logs/gym
-            cp -r ~/Library/Logs/gym/* error_logs/gym/ 2>/dev/null || true
-          fi
-          
-          if [ -d "~/Library/Developer/Xcode/DerivedData/" ]; then
-            find ~/Library/Developer/Xcode/DerivedData/ -name "*.log" -exec cp {} error_logs/ \; 2>/dev/null || true
-          fi
-          
-          # Clean up keychain securely
-          if [ -n "${{ env.KEYCHAIN_NAME }}" ]; then
-            security delete-keychain "${{ env.KEYCHAIN_NAME }}" 2>/dev/null || {
-              echo "⚠️  Could not delete keychain, may already be removed"
-            }
-          fi
-          
-          # Clean up any remaining build artifacts (but preserve logs)
-          rm -rf ~/Library/Caches/com.apple.dt.Xcode/* 2>/dev/null || true
-          
-          echo "✅ Cleanup completed"
+          security delete-keychain "${{ env.KEYCHAIN_NAME }}" 2>/dev/null || true
 
 
       - name: Upload iOS Release IPA
@@ -571,55 +194,24 @@ jobs:
           path: ios/build/smbmobile.ipa
           retention-days: 30
 
-      - name: Create comprehensive GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           body: |
-            ## 🚀 QA Release v${{ github.run_number }}
-            
-            ### 📱 Build Information
-            - **🔨 Xcode Version**: 16.1 with iOS 18.1 runtime
-            - **📦 Build Number**: ${{ github.run_number }}
-            - **🌿 Branch**: ${{ github.ref_name }}
-            - **📝 Commit**: ${{ github.sha }}
-            - **⏰ Build Time**: ${{ github.event.head_commit.timestamp }}
-            
-            ### 🔧 Technical Details
-            - **🏗️  Framework**: Static frameworks with Firebase integration
-            - **🎯 Deployment Target**: iOS 15.1+
-            - **🔥 Firebase SDK**: 11.8.0+ (Xcode 16.1 compatible)
-            - **⚛️  React Native**: 0.81.5
-            - **📱 React Native Firebase**: 23.8.4+
-            
-            ### 📋 Build Artifacts
-            - **🤖 Android AAB**: Available in Actions artifacts
-            - **🍎 iOS IPA**: Available in Actions artifacts
-            - **📊 Build Logs**: Available if build failed
-            
-            ### 🚀 Deployment Status
-            - **Android**: Internal track on Google Play Console
-            - **iOS**: TestFlight for internal testing
-            
-            ### 🔍 Quality Assurance
-            - ✅ Xcode 16.1 compatibility validated
-            - ✅ Firebase integration tested
-            - ✅ Static framework configuration verified
-            - ✅ Code signing and provisioning validated
-            - ✅ IPA structure and size validated
-            
-            ### 📖 Testing Instructions
-            1. **iOS TestFlight**: Check your email for TestFlight invitation
-            2. **Android Internal**: Access via Google Play Console internal track
-            3. **Report Issues**: Use GitHub Issues with the `qa-release` label
-            
-            ### 🔗 Useful Links
-            - [📊 Build Workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            - [📝 Commit Details](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-            - [🐛 Report Issues](${{ github.server_url }}/${{ github.repository }}/issues/new)
+            ## QA Release v${{ github.run_number }}
+            ### 📱 Build Artifacts
+            - **🤖 Android AAB**: Download from Actions tab
+            - **🍎 iOS IPA**: Download from Actions tab
+            ### 📋 Build Details
+            - **Commit**: ${{ github.sha }}
+            - **Branch**: ${{ github.ref_name }}
+            - **Build Number**: ${{ github.run_number }}
+            - **Xcode**: 16.1 with iOS 18.1 runtime
+            ### 🚀 Deployment
+            - Android: Internal track on Google Play
+            - iOS: TestFlight
           draft: false
           tag_name: qa-v${{ github.run_number }}
           prerelease: true
-          name: 🚀 QA Release v${{ github.run_number }}
+          name: QA Release v${{ github.run_number }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: |
-            ios/build/smbmobile.ipa
