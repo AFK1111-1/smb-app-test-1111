@@ -49,13 +49,12 @@ const withPodfileModifications: ConfigPlugin = (config) => {
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
         config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
         config.build_settings['DEFINES_MODULE'] = 'YES'
-        config.build_settings['USE_HEADERMAP'] = 'NO'
         config.build_settings['SWIFT_VERSION'] = '5.0'
         config.build_settings['CLANG_ENABLE_COMMON_BLOCKS'] = 'YES'
 
         # RNFBMessaging/RNFBApp specific fix for Xcode 16.1 CompileC errors
-        # RNFBMessaging/RNFBApp specific fix for Xcode 16.1 CompileC errors
         if target.name.include?('RNFBMessaging') || target.name.include?('RNFBApp')
+          config.build_settings['USE_HEADERMAP'] = 'YES'
           # Explicitly add header search paths for Firebase and React headers
           search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
           search_paths = [search_paths] if search_paths.is_a?(String)
@@ -72,14 +71,15 @@ const withPodfileModifications: ConfigPlugin = (config) => {
           config.build_settings['HEADER_SEARCH_PATHS'] = search_paths
         end
 
-        # SDWebImageWebPCoder / SDWebImage specific fix
-        if target.name.include?('SDWebImageWebPCoder') || target.name.include?('SDWebImage') || target.name.include?('libwebp')
+        # Image and Promises pods specific fix
+        if target.name.include?('SDWebImage') || target.name.include?('libwebp') || target.name.include?('PromisesObjC') || target.name.include?('FBLPromises')
           config.build_settings['USE_HEADERMAP'] = 'YES'
           search_paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
           search_paths = [search_paths] if search_paths.is_a?(String)
           [
             '$(PODS_ROOT)/Headers/Public/SDWebImage',
             '$(PODS_ROOT)/Headers/Public/libwebp',
+            '$(PODS_ROOT)/Headers/Public/PromisesObjC',
             '$(PODS_ROOT)/Headers/Public'
           ].each do |path|
             search_paths << path unless search_paths.include?(path)
